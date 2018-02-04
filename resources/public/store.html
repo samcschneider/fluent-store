@@ -1,0 +1,86 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Hybrid Widget</title>
+            
+            
+    </head>
+    <body>
+        <div id="movyn-test"><h3>Doing some store stuff</h3></div>
+        
+        <script type="text/javascript" src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+        
+        <script>
+            $.getScript('https://sandbox.connect.fluentretail.com/storeLocator', function() {
+                        parcelpoint.Store.init({
+                                        apiKey: "UN5NJB",
+                                        googleAPIKey: 'AIzaSyDeq3bYHMmUL-dO7U3OoKUz4S0FoGfXgjs',
+                                               features: [],
+                                               targetDiv:      "movyn-test",
+                                               clustering:     false,
+                                               overrideCSS:    "http://apitest.parcelpoint.com.au/widget/v3/css/theme/default",
+                                               storeType: "hybrid",
+                                               showETAOpenHours: true,
+                                               showFulfilmentETA: false,
+                                               showDirections: true,
+                                                messages: {
+                                                    search: "Search Location",
+                                                    noLocationSelected: "No Location Selected",
+                                                    paginationLeft: "Prev.",
+                                                    paginationRight: "More",
+                                                    loadingError: "We’re so sorry but store pick-up is not working right now!"
+                                                }
+                                               });
+                        
+                        parcelpoint.Property.onChange(["storeDetails"], function(property, storeDetails) {
+                                                      if (typeof(storeDetails) != "undefined" && storeDetails != null) {
+                                                      storeAddress = {
+                                                      StoreId:  storeDetails.storeId,
+                                                      Line1:    storeDetails.storeAddress1,
+                                                      Line2:    storeDetails.storeAddress2,
+                                                      City:     storeDetails.storeCity,
+                                                      County:   storeDetails.storeState,
+                                                      Postcode: storeDetails.storePostCode
+                                                      }
+                                                      
+                                                      $.ajax({
+                                                             type:    'POST',
+                                                             url:     '/checkout/basket/save-delivery-address',
+                                                             data:    {deliveryAddress: storeAddress},
+                                                             success: function(data) {
+                                                             $('#delivery-Line1').val($('#customer-Name').val());
+                                                             $('#delivery-Line2').val(storeDetails.storeAddress1 + '\n' + storeDetails.storeAddress2);
+                                                             $('#delivery-LookupLine1').val(storeDetails.storeAddress1);
+                                                             $('#delivery-LookupLine2').val(storeDetails.storeAddress2);
+                                                             $('#delivery-City').val(storeDetails.storeCity);
+                                                             $('#delivery-County').val(storeDetails.storeState);
+                                                             $('#delivery-Postcode').val(storeDetails.storePostCode);
+                                                             }
+                                                             });
+                                                      }
+                                                      });
+                        
+                        
+                        parcelpoint.Store.display({
+                                       //           storeExternalId:"50142"
+                                                  });
+                        
+                        setTimeout(function(){
+                        /*
+                         parcelpoint.Store.update({
+                         storeExternalId:"SHA124",
+                         //test:'stuff'
+                         //  storeExternalId:"BNT3071"
+                         
+                         });  
+                         */
+                                   
+                                   }, 2000);
+                        
+                        
+                        });
+                        
+            </script>
+    </body>
+</html>
