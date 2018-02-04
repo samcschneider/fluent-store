@@ -1,12 +1,29 @@
-# fr-api
+# Fluent Store
 
-FIXME: Write a one-line description of your library/project.
+Sample ecomm storefront that makes use of the Fluent APIs to create orders and show the store locator
 
 ## Overview
 
-FIXME: Write a paragraph about the library/project and highlight its goals.
+Provide some code examples of working with the APIs. This project will be continuously enhanced as
+new API samples are needed.
 
 ## Setup
+
+Acquire a fluent sandbox environment. You'll receive fluent credentials in your setup email.
+You'll need to include settings for the following values:
+
+/src/fr_api/network.cljs provide values {{here}}
+  -> default-env :client-id     "{{your client id}}"
+                       :client-secret "{{your client secret}}"
+                       :username "{{your api user name}}"
+                       :password "{{your api password}}"})
+
+/resources/index.html
+  -> if you wish to use the store locator widget, you'll need your API key as well as a google
+maps API key.
+  apiKey: '{{your api key}}'
+  googleAPIKey: '{{your *google* API key}}'
+
 
 To get an interactive development environment run:
 
@@ -34,6 +51,6 @@ get live reloading, nor a REPL.
 
 ## License
 
-Copyright © 2014 FIXME
+Copyright © 2017
 
 Distributed under the Eclipse Public License either version 1.0 or (at your option) any later version.
