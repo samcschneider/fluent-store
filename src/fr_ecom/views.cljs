@@ -47,7 +47,7 @@
   ;(.log js/console (with-out-str (pp/pprint app )) )
   ;(.log js/console (with-out-str (pp/pprint (:cart app))))
   ;[:div c/header c/checkout-header c/checkout]
-  [:div [c/header' app] [c/section-header app "Shopping Cart" "Cart"] [c/cart-contents app]]
+  [:div [c/header' app] [c/section-header app "Shopping Basket" "Basket"] [c/cart-contents app]]
   )
 
 (defn delivery[app]
@@ -68,7 +68,7 @@
   [:div [c/header' app] [c/section-header app "Shipping" "Checkout / Shipping"] [c/shipping app]])
 
 (defn checkout-payment[app]
-  [:div [c/header' app] [c/section-header app "Payment" "Checkout / Payment"] [c/payment app]])
+  [:div [c/header' app] [c/section-header app "Customer Contact Information" "Reserve / Customer Contact"] [c/payment app]])
 
 (defn checkout-summary[app]
   [:div [c/header' app] [c/section-header app "Order Review" "Checkout / Review"] [c/cart-review app]])

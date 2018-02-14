@@ -179,6 +179,8 @@
 
     ))
 
+(declare store-cart)
+
 (defn menu'[app]
 
   [:nav {:class "navbar navbar-expand-lg"}
@@ -431,7 +433,7 @@
        [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
         [:i {:class "icon-cart"}]
         [:div {:class "cart-no"} (reduce + (map :quantity (vals (:cart @app))))]]
-       [:a {:href "#cart", :class "text-primary view-cart"} "View Cart"]
+       [:a {:href "#cart", :class "text-primary view-cart"} "View Basket"]
        [:div {:aria-labelledby "cartdetails", :class "dropdown-menu"}  ;"<!-- cart item-->"
 [:div {:style {:overflow "auto" :height "280px"}}
         (let [make-row (partial mini-cart-row app)]
@@ -443,8 +445,8 @@
          [:strong {:class "text-primary"} (currency (calc-cart-item-total app))]] ;"<!-- call to actions-->"
 
         [:div {:class "dropdown-item CTA d-flex"}
-         [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
-         [:a {:href "#checkout-delivery", :class "btn btn-template wide"} "Checkout"]]]]]]]])
+         [:a {:href "#cart", :class "btn btn-template wide"} "View Basket"]
+         [:a {:href "#checkout-store", :class "btn btn-template wide" :on-click #(store-cart app)} "Reserve"]]]]]]]])
 (def menu
   [:nav {:class "navbar navbar-expand-lg"}
    [:div {:class "search-area"}
@@ -662,40 +664,45 @@
 
 (def hero-items
   [:section {:class "hero hero-home no-padding"}
-   [:div {:class "owl-carousel owl-theme hero-slider"}
-    [:div {:style {:background "url(img/hero-bg.jpg)"} :class "item d-flex align-items-center has-pattern"}
+   [:div ;{:class "owl-carousel owl-theme hero-slider"}
+    [:div {:style {:background "url(https://www.mauijim.com/medias/valentines-maui-sunrise.jpg?context=bWFzdGVyfGltYWdlc3wxNjEzMTR8aW1hZ2UvanBlZ3xpbWFnZXMvaGJlL2g1Ni84ODEzNTQ2NjM1Mjk0LmpwZ3xhMjI0YTRhMTk4ZjJjMzU1NjRlZDRkMzk0ZTQxMTk1YWUxN2I1MWE0OTAyNzRhNThkMjQ5ZDZhNzI4MTZiMDNm)"} :class "item d-flex align-items-center has-pattern"}
      [:div {:class "container"}
       [:div {:class "row"}
-       [:div {:class "col-lg-6"}
-        [:h1 "The Hub"]
+       [:div {:class "col-lg-6 text-white"}
+        [:h1 "Love the View"]
         [:ul {:class "lead"}
          [:li
-          [:strong "Bootstrap 4 E-commerce"]" template"]
-         [:li
-          [:strong "18"]" pages, "
-          [:strong "6"]" colour variants"]
-         [:li
-          [:strong "SCSS"]" sources "]
-         [:li "frequent &amp; "
-          [:strong "free updates"]]]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+          [:strong "With a Gift of Maui Jim Sunglasses to Protect Your Valentine"]]
+         ;[:li
+         ; [:strong "18"]" pages, "
+         ; [:strong "6"]" colour variants"]
+         ;[:li
+         ; [:strong "SCSS"]" sources "]
+         ;[:li "frequent &amp; "
+         ; [:strong "free updates"]]
+         ]
+        [:a {:href "#categories/c14544", :class "btn btn-template wide shop-now"} "Shop Now"
          [:i {:class "icon-bag"} " "]]]]]]
-    [:div {:style {:background "url(img/hero-bg-2.jpg)"} :class "item d-flex align-items-center"}
-     [:div {:class "container"}
-      [:div {:class "row"}
-       [:div {:class "col-lg-6 text-white"}
-        [:h1 "Labore et dolore magna aliqua"]
-        [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-         [:i {:class "icon-bag"} "  "]]]]]]
-    [:div {:style {:background "url(img/hero-bg-3.jpg)"} :class "item d-flex align-items-center"}
-     [:div {:class "container"}
-      [:div {:class "row"}
-       [:div {:class "col-lg-6 text-white"}
-        [:h1 "Sed do eiusmod tempor"]
-        [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-         [:i {:class "icon-bag"} "           "]]]]]]]])
+    ;[:div {:style {:background "url(img/hero-bg-2.jpg)"} :class "item d-flex align-items-center"}
+    ; [:div {:class "container"}
+    ;  [:div {:class "row"}
+    ;   [:div {:class "col-lg-6 text-white"}
+    ;    [:h1 "Labore et dolore magna aliqua"]
+    ;    [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
+    ;    [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+    ;     [:i {:class "icon-bag"} "  "]]]]]]
+    ;[:div {:style {:background "url(img/hero-bg-3.jpg)"} :class "item d-flex align-items-center"}
+    ; [:div {:class "container"}
+    ;  [:div {:class "row"}
+    ;   [:div {:class "col-lg-6 text-white"}
+    ;    [:h1 "Sed do eiusmod tempor"]
+    ;    [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
+    ;    [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+    ;     [:i {:class "icon-bag"} "           "]]]]]]
+
+    ]]
+
+  )
 
 (defn product-category-swatch [index]
   [:div {:class "col-lg-4"}
@@ -1044,8 +1051,8 @@
     [:div {:class "row d-flex"}
      [:div {:class "col-lg-9 order-2 order-lg-1"}
       [:h1 title]
-      [:p {:class "lead text-muted"} (str "You currently have " (reduce + (map :quantity (vals (:cart @app)))) " items in your shopping cart")]
-      [:p {:class "lead text-muted"} (str "Cart total " (currency (calc-cart-item-total app)) )]
+      [:p {:class "lead text-muted"} (str "You currently have " (reduce + (map :quantity (vals (:cart @app)))) " items in your shopping basket")]
+      [:p {:class "lead text-muted"} (str "Basket total " (currency (calc-cart-item-total app)) )]
       ]
      [:ul {:class "breadcrumb d-flex justify-content-start justify-content-lg-center col-lg-3 text-right order-1 order-lg-2"}
       [:li {:class "breadcrumb-item"}
@@ -1130,7 +1137,7 @@
       [:div {:class "container"}
        [:div {:class "CTAs d-flex align-items-center justify-content-center justify-content-md-end flex-column flex-md-row"}
         ;[:a {:href "shop.html", :class "btn btn-template-outlined wide"} "Continue Shopping"]
-        [:a {:href "#checkout-delivery", :class "btn btn-template wide"} "Checkout"]]]]
+        [:a {:href "#checkout-store", :class "btn btn-template wide" :on-click #(store-cart app)} "Reserve"]]]]
      ]
     )
     )
@@ -1251,7 +1258,7 @@
                 [:a {:href "#checkout-delivery", :class "btn btn-template-outlined prev"}
                  [:i {:class "fa fa-angle-left"}] "Back to Delivery"]
                 [:span {:style {"padding-left" "50px"}}]
-                [:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(check-fulfillment app)} "Check Availability"
+                [:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(check-fulfillment app)} "Continue Reservation"
                  [:i {:class "fa"}]]
                 ;[:span {:style {"padding-left" "50px"}}]
                 ;[:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(check-fulfillment app)} "Reserve Items"
@@ -1496,9 +1503,10 @@
                 :on-click (fn[e]
                             (. e preventDefault)
                             (println (str "Adding -> " (if is-variant? (:id (first valid-variants)) product-id)))
+                            ;ensure cart contains only this item and move directly to store selection screen...
                             (add-to-cart (if is-variant? (:id (first valid-variants)) product-id) app (int-input-value "pdp-qty-select"))
                             )}
-            [:i {:class "icon-cart"}] "Add to Cart" ]]
+            [:i {:class "icon-cart"}] "Reserve in Store" ]]
           [:li {:class "list-inline-item"}
            [:a {:href "#", :class "btn btn-template-outlined wide"}
             [:i {:class "fa fa-heart-o"}] "Add to wishlist"]]]]]]]
@@ -1636,7 +1644,7 @@
     [:div
     [:div {:style {:paddingLeft "40px"} :class " row"}
      [:span {:class "col-md-6"}
-      [:h6 {:class "text-uppercase"} "Pickup Location"] [:span {:class "total"} (str (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))] ]]
+      [:h6 {:class "text-uppercase"} "Reservation Location"] [:span {:class "total"} (str (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))] ]]
      ;[:h6 {:class "text-uppercase"} "Address"][:p (str (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))]]
     [:section {:class "checkout"}
      (when (:spinner-fo @app)
@@ -1657,7 +1665,7 @@
          [:li {:class "nav-item"}
           [:a {:href "#checkout-shipping", :class "nav-link active"} "Check Availability"]]
          [:li {:class "nav-item"}
-          [:a {:href "#checkout-payment", :class "nav-link"} "Payment Method "]]
+          [:a {:href "#checkout-payment", :class "nav-link"} "Customer Contact "]]
          ]
         [:div {:class "tab-content"}
          [:div {:id "order-review", :class "tab-block"}
@@ -1678,7 +1686,7 @@
           [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
            [:a {:href "#checkout-store", :class "btn btn-template-outlined wide prev"}
             [:i {:class "fa fa-angle-left"}]"Back to Choose Store"]
-           [:a {:href "#checkout-payment", :class "btn btn-template wide next"} "Payment Method"
+           [:a {:href "#checkout-payment", :class "btn btn-template wide next"} "Customer Contact"
             [:i {:class "fa fa-angle-right"}]]]]]]
        [order-summary app]
        ]]]]))
@@ -1910,7 +1918,7 @@
             [:a {:href "#checkout-availability", :class "nav-link"} "Check Availability"]]
            )
          [:li {:class "nav-item"}
-          [:a {:href "#checkout-payment", :class "nav-link active"} "Payment Method "]]
+          [:a {:href "#checkout-payment", :class "nav-link active"} "Customer Contact"]]
          (when hd
            [:li {:class "nav-item"}
             [:a {:href "#", :class "nav-link disabled"} "Order Review"]]
@@ -1922,22 +1930,22 @@
            [:div {:class "card"}
             [:div {:id "headingOne", :role "tab", :class "card-header"}
              [:h6
-              [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseOne", :aria-expanded "true", :aria-controls "collapseOne"} "Credit Card"]]]
+              [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseOne", :aria-expanded "true", :aria-controls "collapseOne"} "Contact Information"]]]
             [:div {:id "collapseOne", :role "tabpanel", :aria-labelledby "headingOne", :class "collapse show"}
              [:div {:class "card-body"}
 
               [:div {:class "CTAss"}
                [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev" :on-click #(copy-payment app)}
-                [:i {:class "fa"}] "Use Saved Payment"]
+                [:i {:class "fa"}] "Saved Customer"]
                ]
 
               [:form {:action "#" :autocomplete "false"}
                [:div {:class "row"}
-                [text-input "card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" app :payment]
-                [text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" app :payment]
-                [text-input "expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" app :payment]
-                [text-input "card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" app :payment]
-                [text-input "card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" app :payment]
+                [text-input "card-name" "Customer Name" "card-name" "Name on Card" "col-md-6" app :payment]
+                ;[text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" app :payment]
+                ;[text-input "expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" app :payment]
+                ;[text-input "card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" app :payment]
+                ;[text-input "card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" app :payment]
                 (when cc
                   [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" app :payment]
                   )
@@ -1945,28 +1953,29 @@
                   [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" app :payment]
                   )
                 ]]]]]
-           [:div {:class "card"}
-            [:div {:id "headingTwo", :role "tab", :class "card-header"}
-             [:h6
-              [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseTwo", :aria-expanded "false", :aria-controls "collapseTwo", :class "collapsed"} "Paypal"]]]
-            [:div {:id "collapseTwo", :role "tabpanel", :aria-labelledby "headingTwo", :class "collapse"}
-             [:div {:class "card-body"}
-              [:input {:type "radio", :name "shippping", :id "payment-method-1", :class "radio-template"}]
-              [:label {:for "payment-method-1"}
-               [:strong "Continue with Paypal"]
-               [:br]
-               [:span {:class "label-description"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit."]]]]]
-           [:div {:class "card"}
-            [:div {:id "headingThree", :role "tab", :class "card-header"}
-             [:h6
-              [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseThree", :aria-expanded "false", :aria-controls "collapseThree", :class "collapsed"} "Pay on delivery"]]]
-            [:div {:id "collapseThree", :role "tabpanel", :aria-labelledby "headingThree", :class "collapse"}
-             [:div {:class "card-body"}
-              [:input {:type "radio", :name "shippping", :id "payment-method-2", :class "radio-template"}]
-              [:label {:for "payment-method-2"}
-               [:strong "Pay on Delivery"]
-               [:br]
-               [:span {:class "label-description"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit."]]]]]]
+           ;[:div {:class "card"}
+           ; [:div {:id "headingTwo", :role "tab", :class "card-header"}
+           ;  [:h6
+           ;   [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseTwo", :aria-expanded "false", :aria-controls "collapseTwo", :class "collapsed"} "Paypal"]]]
+           ; [:div {:id "collapseTwo", :role "tabpanel", :aria-labelledby "headingTwo", :class "collapse"}
+           ;  [:div {:class "card-body"}
+           ;   [:input {:type "radio", :name "shippping", :id "payment-method-1", :class "radio-template"}]
+           ;   [:label {:for "payment-method-1"}
+           ;    [:strong "Continue with Paypal"]
+           ;    [:br]
+           ;    [:span {:class "label-description"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit."]]]]]
+           ;[:div {:class "card"}
+           ; [:div {:id "headingThree", :role "tab", :class "card-header"}
+           ;  [:h6
+           ;   [:a {:data-toggle "collapse", :data-parent "#accordion", :href "#collapseThree", :aria-expanded "false", :aria-controls "collapseThree", :class "collapsed"} "Pay on delivery"]]]
+           ; [:div {:id "collapseThree", :role "tabpanel", :aria-labelledby "headingThree", :class "collapse"}
+           ;  [:div {:class "card-body"}
+           ;   [:input {:type "radio", :name "shippping", :id "payment-method-2", :class "radio-template"}]
+           ;   [:label {:for "payment-method-2"}
+           ;    [:strong "Pay on Delivery"]
+           ;    [:br]
+           ;    [:span {:class "label-description"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit."]]]]]
+           ]
           [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
 
 
@@ -1982,7 +1991,7 @@
              [:a {:href "#checkout-availability", :class "btn btn-template-outlined wide prev"}
               [:i {:class "fa fa-angle-left"}] "Back to Check Availability"])
            (when cc
-             [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(place-order app)} "Place Order"
+             [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(place-order app)} "Complete Reservation"
               [:i {:class "fa fa-angle-right"}]]
              )
            ]]]]
@@ -2056,10 +2065,10 @@
      [:div {:class "col-lg-8 col-sm-9"}
 
       (if (:order-error @app)
-        [:h2 "There was a problem processing your order"[:p {:style {"color" "#b21129"}} (:order-error @app)]]
+        [:h2 "There was a problem processing your reservation"[:p {:style {"color" "#b21129"}} (:order-error @app)]]
         (if (:order-id @app)
-          [:h2 "Your order has been placed successfully"]
-          [:h2 "Your order is processing"]
+          [:h2 "Your reservation has been placed successfully"]
+          [:h2 "Your reservation is processing"]
           )
         )
      ]
