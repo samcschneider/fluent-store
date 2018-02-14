@@ -24,7 +24,7 @@
                      {:orders {}
                       :categories ds/categories
                       :variant-selector ds/variant-selectors
-                      :cart-add 2
+                      :cart-add 0
                       :cart {}
                       :shipping 0.00
                       :replacement ds/replacement
@@ -240,19 +240,6 @@
 
 (defmethod current-page :checkout.placeorder []
   [v/order-confirmation app-state])
-
-;(defn setup-ui []
-;
-;  (orders-event-loop)
-;  [:div header hero-items categories products-men divider products-women brands example-modal
-;   ;[:div
-;   ; (token-ui net/bearer)
-;   ; (get-orders-ui responses)
-;   ;]
-;   ]
-;  )
-
-
 
 (defn setup-ui' []
 
