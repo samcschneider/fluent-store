@@ -1939,7 +1939,7 @@
                 [:i {:class "fa"}] "Saved Customer"]
                ]
 
-              [:form {:action "#" :autocomplete "false"}
+              [:form {:action "#"}
                [:div {:class "row"}
                 [text-input "card-name" "Customer Name" "card-name" "Name on Card" "col-md-6" app :payment]
                 ;[text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" app :payment]
