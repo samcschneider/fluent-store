@@ -12,7 +12,11 @@
                  [cljs-http "0.1.43"]
                  [reagent "0.7.0"]
                  [secretary "1.2.3"]
-                 [reagent-utils "0.2.1"]]
+                 [reagent-utils "0.2.1"]
+		 [re-frame "0.10.5"]
+                 [com.andrewmcveigh/cljs-time "0.5.0"]
+;;from re-frame template                 [org.clojure/core.async "0.2.391"]
+                 [re-com "2.1.0"]]
 
   :plugins [[lein-figwheel "0.5.13"]
             [lein-cljsbuild "1.1.7" :exclusions [[org.clojure/clojure]]]]
@@ -40,7 +44,13 @@
                            :source-map-timestamp true
                            ;; To console.log CLJS data-structures make sure you enable devtools in Chrome
                            ;; https://github.com/binaryage/cljs-devtools
-                           :preloads [devtools.preload]}}
+                           :preloads [devtools.preload
+				      day8.re-frame-10x.preload]
+                    	   :closure-defines      {"re_frame.trace.trace_enabled_QMARK_" true
+                                           "day8.re_frame.tracing.trace_enabled_QMARK_" true}
+                    	   :external-config      {:devtools/config {:features-to-install :all}}
+
+}}
                ;; This next build is a compressed minified build for
                ;; production. You can build this with:
                ;; lein cljsbuild once min
@@ -49,6 +59,7 @@
                 :compiler {:output-to "resources/public/js/compiled/fr_api.js"
                            :main fr-api.core
                            :optimizations :advanced
+                    	   :closure-defines {goog.DEBUG false}
                            :pretty-print false}}]}
 
   :figwheel {;; :http-server-root "public" ;; default and assumes "resources"
@@ -96,7 +107,10 @@
   ;; https://github.com/bhauman/lein-figwheel/wiki/Using-the-Figwheel-REPL-within-NRepl
   :profiles {:dev {:dependencies [[binaryage/devtools "0.9.4"]
                                   [figwheel-sidecar "0.5.13"]
-                                  [com.cemerick/piggieback "0.2.2"]]
+                                  [com.cemerick/piggieback "0.2.2"]
+	                          [day8.re-frame/re-frame-10x "0.3.0"]
+             		          [day8.re-frame/tracing "0.5.0"]]
+
                    ;; need to add dev source path here to get user.clj loaded
                    :source-paths ["src" "dev"]
                    ;; for CIDER
