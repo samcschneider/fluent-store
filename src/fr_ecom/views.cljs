@@ -3,6 +3,7 @@
     [fr-ecom.components :as c]
     [fr-api.data-source :as ds]
     [cljs.pprint :as pp]
+    [re-frame.core :as re :refer [subscribe dispatch]]
     )
   )
 
@@ -12,22 +13,24 @@
 
 (defn categories[app]
   (println "views :: Rending product-list")
-  [:div [c/header' app] [c/product-list app] c/example-modal]
+  [:div [c/header' app] [c/product-list] c/example-modal]
   )
 
 (defn hello[]
-  [:div c/header [:p "hello"] c/hero-items]
+  [:div [:p "hello"] c/hero-items]
   )
 
 (defn product-details [app]
   (println "views :: Rending product details...")
   (.scrollTo js/window 0 0) ;scroll window to top in case we're coming from a list page
-  (let [product-id (get-in @app [:args :product-id])
-        base-product (ds/find-product-by-id product-id);(first (filter #(= product-id (:id %)) (:catalog @app)))
+  (let [product-ref (:product-ref @(subscribe [:ecom/current-page-args]))
+        base-product @(subscribe [:ecom/products-by-ref product-ref]) ; (ds/find-product-by-id product-id)
         variant-selector-id (:variant-selector base-product)
-        variant-selector (get (:variant-selector @app) variant-selector-id)
+        variant-selectors @(subscribe [:ecom/variant-selectors])
+        variant-selector (get variant-selectors variant-selector-id)
         ]
 
+    (println (str "ref" product-ref " base product: " base-product " variant selector: " variant-selector-id))
   (when variant-selector-id
     (let [selector-ids (map :id (filter :selector? variant-selector))
           selector-state (reduce (fn [m v] (assoc m v "")) {} selector-ids)

@@ -2,20 +2,14 @@
 
 (def default-site "Maui Jim")
 
-(def categories (atom [
-                       {:id "c-001" :ref "KS-001" :name "Jewelery" :order 0}
-                       {:id "c-002" :ref "KS-002" :name "Necklaces" :parent "KS-001" :order 1}
-                       {:id "c-003" :ref "KS-003" :name "Earrings" :parent "KS-001" :order 2}
-                       {:id "c-004" :ref "KS-004" :name "Bracelets" :parent "KS-001" :order 3}
-                       {:id "c-010" :ref "AP-001" :name "Clothing" :order 10}
-                       {:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-001" :order 1}
-
-                 ;{:id "c-010.1" :ref "AP-0010-1" :name "Men's" :parent "AP-001" :order 1}
-                      ;{:id "c-010.1" :ref "AP-0010-1" :name "Women's" :parent "AP-001" :order 2}
-                      ; ;{:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-0010-1" :order 1}
-                 ;{:id "c-050" :ref "Foo" :name "Electronics" :order 5}
-                 ;{:id "c-060" :ref "Bar" :name "Brands" :order 4}
-                       ]))
+(def categories (atom {
+                       "c-001" {:id "c-001" :ref "KS-001" :name "Jewelery" :order 0}
+                       "c-002" {:id "c-002" :ref "KS-002" :name "Necklaces" :parent "KS-001" :order 1}
+                       "c-003" {:id "c-003" :ref "KS-003" :name "Earrings" :parent "KS-001" :order 2}
+                       "c-004" {:id "c-004" :ref "KS-004" :name "Bracelets" :parent "KS-001" :order 3}
+                       "c-005" {:id "c-010" :ref "AP-001" :name "Clothing" :order 10}
+                       "c-006" {:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-001" :order 1}
+                       }))
 
 (defn find-category-by-parent[parent-id]
   (let [cats (filter #(= parent-id (:parent %)) @categories)]

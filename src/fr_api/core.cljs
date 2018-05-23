@@ -12,7 +12,11 @@
     [fr-ecom.views :as v]
     [fr-ecom.components :as comp]
     [fr-api.data-source :as ds]
-    [clojure.string :as string]))
+    [clojure.string :as string]
+    [fr-api.db]
+    [fr-api.events :as ev]
+    [re-frame.core :as re-frame :refer [dispatch subscribe]]
+    ))
 
 (enable-console-print!)
 
@@ -85,30 +89,30 @@
            )
   )
 
-(def sites-chan (chan))
-
-(defn sites-event-loop []
-  (go-loop []
-           (when-let [response (<! sites-chan)]
-             (net/log "received data on sites channel")
-             (net/log response)
-             (if (= (:status response) 200)
-               (let [sites (:body response)
-                     selected (filter (fn [i] (= (:name i) ds/default-site)) (:sites sites))]
-                 (swap! app-state merge @app-state sites)
-                 (let [site (if selected
-                              (first selected)
-                              ;otherwise, just default ot the first one?
-                              (first (:sites sites)))]
-                   (comp/change-site (:id site) app-state)
-                   )
-                 )
-               (swap! app-state merge @app-state {:sites-error (format-error response)})
-               )
-             (recur)
-             )
-           )
-  )
+;(def sites-chan (chan))
+;
+;(defn sites-event-loop []
+;  (go-loop []
+;           (when-let [response (<! sites-chan)]
+;             (net/log "received data on sites channel")
+;             (net/log response)
+;             (if (= (:status response) 200)
+;               (let [sites (:body response)
+;                     selected (filter (fn [i] (= (:name i) ds/default-site)) (:sites sites))]
+;                 (swap! app-state merge @app-state sites)
+;                 (let [site (if selected
+;                              (first selected)
+;                              ;otherwise, just default ot the first one?
+;                              (first (:sites sites)))]
+;                   (comp/change-site (:id site) app-state)
+;                   )
+;                 )
+;               (swap! app-state merge @app-state {:sites-error (format-error response)})
+;               )
+;             (recur)
+;             )
+;           )
+;  )
 
 ;temp hack to cache all active locations
 (defn get-locations[]
@@ -143,61 +147,62 @@
   (secretary/set-config! :prefix "#")
 
   (defroute "/" []
-            (swap! app-state assoc :page :home))
+            (dispatch [:ecom/navigate :home])
+            )
 
   (defroute "/categories/:category-id" [category-id]
-            (js/console.log (str "category id: " category-id))
-            ;TODO hate this... there has to be a cleaner way to get query params and path args
-            ;to the dispatched methods?!
-            (swap! app-state assoc :args {:category-id category-id})
-            (swap! app-state assoc :page :categories))
+            (dispatch [:ecom/navigate :categories {:category-id category-id}])
+            )
 
   (defroute "/hello" []
-            (swap! app-state assoc :page :hello))
+            (dispatch [:ecom/navigate :hello]))
 
   (defroute "/cart" []
-            (swap! app-state assoc :page :cart))
+            (dispatch [:ecom/navigate :cart]))
 
   (defroute "/checkout-delivery" []
-            (swap! app-state assoc :page :checkout.delivery))
+            (dispatch [:ecom/navigate :checkout.delivery]))
 
   (defroute "/checkout-store" []
-            (swap! app-state assoc :page :checkout.store))
+            (dispatch [:ecom/navigate :checkout.store])
+            )
 
   (defroute "/checkout-availability" []
-            (swap! app-state assoc :page :checkout.availability))
+            (dispatch [:ecom/navigate :checkout.availability])
+            )
 
   (defroute "/checkout-address" []
-           (swap! app-state assoc :page :checkout.address))
+            (dispatch [:ecom/navigate :checkout.address])
+            )
 
   (defroute "/checkout-shipping" []
-            (swap! app-state assoc :page :checkout.shipping))
+            (dispatch [:ecom/navigate :checkout.shipping])
+            )
 
   (defroute "/checkout-payment" []
-            (swap! app-state assoc :page :checkout.payment))
+            (dispatch [:ecom/navigate :checkout.payment])
+            )
 
   (defroute "/checkout-summary" []
-            (swap! app-state assoc :page :checkout.summary))
+            (dispatch [:ecom/navigate :checkout.summary])
+            )
 
   (defroute "/checkout-placeorder" []
-            (swap! app-state assoc :page :checkout.placeorder))
+            (dispatch [:ecom/navigate :checkout.placeorder])
+            )
 
-  (defroute "/product-details/:product-id" [product-id]
-            (js/console.log (str "product id: " product-id))
-            ;TODO hate this... there has to be a cleaner way to get query params and path args
-            ;to the dispatched methods?!
-            (swap! app-state assoc :args {:product-id product-id})
-            (swap! app-state assoc :page :product.details))
+  (defroute "/product-details/:product-ref" [product-ref]
+            (dispatch [:ecom/navigate :product.details {:product-ref product-ref}])
+            )
 
   (hook-browser-navigation!))
 
-(defmulti current-page #(@app-state :page))
+(defmulti current-page #(:id @(subscribe [:ecom/current-page])))
 
 (defmethod current-page :home []
   [v/home app-state])
 
 (defmethod current-page :categories []
-  (println "Rendering :: categories")
   [v/categories app-state])
 
 (defmethod current-page :hello []
@@ -212,7 +217,6 @@
 (defmethod current-page :checkout.delivery []
   [v/delivery app-state])
 
-; cc option
 (defmethod current-page :checkout.store []
   [v/store app-state])
 
@@ -241,40 +245,28 @@
 (defmethod current-page :checkout.placeorder []
   [v/order-confirmation app-state])
 
-;(defn setup-ui []
-;
-;  (orders-event-loop)
-;  [:div header hero-items categories products-men divider products-women brands example-modal
-;   ;[:div
-;   ; (token-ui net/bearer)
-;   ; (get-orders-ui responses)
-;   ;]
-;   ]
-;  )
+(defn setup-ui []
 
-
-
-(defn setup-ui' []
-
-  ;TODO introduce app namespace? Comp --> App <-- core --> Comp
-  (comp/config-event-loop app-state next-cart-key!)
-  (sites-event-loop)
-  (net/fr-get "http://localhost:8890/site" {} sites-chan)
   (orders-event-loop)
-  (locations-event-loop)
   (comp/fulfilment-options-event-loop app-state)
-  (comp/place-order-event-loop app-state)
-  (get-locations)
   (app-routes)
   current-page
   )
 
-(reagent/render-component [setup-ui']
-                          (. js/document (getElementById "app")))
-;(defn ^:export main []
-;  (app-routes)
-;  (reagent/render [current-page]
-;                  (.getElementById js/document "app")))
+(defn mount-root []
+  (re-frame/clear-subscription-cache!)
+  (reagent/render-component [setup-ui]
+                            (. js/document (getElementById "app"))))
+
+(defn ^:export init []
+  (re-frame/dispatch-sync [:ecom/initialize-db])
+  ;TODO lazy start these event loops?
+  (ev/new-sites-event-loop :ecom/sites-received :ecom/sites-error)
+  (ev/config-event-loop :ecom/config-received :ecom/config-error)
+  (ev/place-order-event-loop)
+  (re-frame/dispatch-sync [:ecom/load-sites])
+  ;(dev-setup)
+  (mount-root))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

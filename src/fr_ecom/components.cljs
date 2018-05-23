@@ -10,76 +10,26 @@
     [reagent.core :as reagent]
     [fr-api.network :as net]
     [fr-api.data-source :as ds]
-    [cljs.core.async :refer [<! put! chan]])
+    [fr-api.subscriptions :as subscriptions]
+    [cljs.core.async :refer [<! put! chan]]
+    [re-frame.core :refer [subscribe dispatch]]
+    )
   )
 
 ;TODO see check about link processing being disabled in some cases - e.g.:
 ;(fn [e]
 ;  (.(.preventDefault e)Default e)
 
-(defn build-cart[products next-key!]
-  (reduce (fn [col item]
-            (let [item-key (next-key!)
-                  keyed-item (assoc item :key item-key)]
-              (assoc col item-key keyed-item)
-              )
-            ) {} products)
-  )
+;(defn build-cart[products next-key!]
+;  (reduce (fn [col item]
+;            (let [item-key (next-key!)
+;                  keyed-item (assoc item :key item-key)]
+;              (assoc col item-key keyed-item)
+;              )
+;            ) {} products)
+;  )
 
-(def config-chan (chan))
 
-(defn to-set [data key-val]
-  (if (key-val data)
-    (assoc data key-val (set (key-val data)))
-    data
-    )
-  )
-
-(defn build-catalog [catalog]
-
-  (map (fn [item]
-         (println (str "processing..." item))
-         (let [key (first item)
-               product (second item)]
-           (-> product
-               (to-set :supercategories)
-               (to-set :variant-cats)
-               (assoc :id key)
-               (assoc :sku (or (:sku product) (when (not (:base product)) (:ref product))))
-               )
-           )) catalog)
-
-  )
-
-(defn config-event-loop [app next-cart-key-fn]
-  (go-loop []
-           (when-let [response (<! config-chan)]
-             (net/log "received data on config channel")
-             (net/log response)
-             (when (= (:status response) 200)
-               (let [config-data (:body response)]
-                 (swap! app assoc :config config-data)
-                 (swap! app assoc :cart (build-cart (vals (get-in @app [:config :cart])) next-cart-key-fn))
-                 (reset! ds/catalog (build-catalog (get-in @app [:config :products])))
-                 ;TODO should be able to remove :categories from @app...
-                 (swap! app assoc :categories (vals (get-in @app [:config :categories])))
-                 (reset! ds/categories (vals (get-in @app [:config :categories])))
-                 )
-               )
-             (recur)
-             )
-           )
-  )
-
-(defn change-site [site-id app]
-  ;TODO add config for remote host
-  (when-let [selected (first (filter (fn [i] (= (:id i) site-id)) (:sites @app)))]
-    (net/log (str "Selected Site --> " selected))
-    (net/fr-get (str "http://localhost:8890/site/" site-id) {} config-chan)
-    (swap! app assoc :site selected)
-    (swap! app assoc :site-abbrev (string/upper-case (first (:name selected))))
-    )
-  )
 
 (def navbar
   [:div {:class "top-bar"}
@@ -105,47 +55,51 @@
         [:a {:href "#", :class "dropdown-item"} "EUR"]
         [:a {:href "#", :class "dropdown-item"} "GBP"]]]]]]])
 
-(defn sites-row[app site]
+(defn sites-row[site]
   ^{:key (gensym "cs")}
-  [:a {:href "#", :class "dropdown-item" :on-click (fn[e] (. e preventDefault)(change-site (:id site) app))} (:name site)]
+  [:a {:href "#", :class "dropdown-item" :on-click (fn[e] (do (. e preventDefault)(net/log (str "Processing..." (:id site))) (dispatch [:ecom/load-site-config (:id site)])))} (:name site)]
   )
 
-(defn navbar'[app]
-  [:div {:class "top-bar"}
-   [:div {:class "container-fluid"}
-    [:div {:class "row d-flex align-items-center"}
-     [:div {:class "col-lg-6 hidden-lg-down text-col"}
-      [:ul {:class "list-inline"}
-       [:li {:class "list-inline-item"}
-        [:i {:class "icon-telephone"}]"020-800-456-747"]
-       [:li {:class "list-inline-item"} "Free shipping on orders over $300"]]]
-     [:div {:class "col-lg-6 d-flex justify-content-end"}  ;<!-- Language Dropdown-->
-      [:div {:class "dropdown show"}
-       [:a {:id "langsDropdown", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
-        [:img {:src "img/united-kingdom.svg", :alt "english"}]"English"]
-       [:div {:aria-labelledby "langsDropdown", :class "dropdown-menu"}
-        [:a {:href "#", :class "dropdown-item"}
-         [:img {:src "img/germany.svg", :alt "german"}]"German"]
-        [:a {:href "#", :class "dropdown-item"}
-         [:img {:src "img/france.svg", :alt "french"}]"French"]]] ;"<!-- Currency Dropdown-->"
-      [:div {:class "dropdown show"}
-       [:a {:id "currencyDropdown", :href "#", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"} "USD"]
-       [:div {:aria-labelledby "currencyDropdown", :class "dropdown-menu"}
-        [:a {:href "#", :class "dropdown-item"} "EUR"]
-        [:a {:href "#", :class "dropdown-item"} "GBP"]]]
-      [:div {:class "dropdown show"}
-       [:a {:id "sitedropdown", :href "#", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"} (:site-abbrev @app)] ;<--current site inside here...
-       [:div {:aria-labelledby "currencyDropdown", :class "dropdown-menu"}
-        (let [row-fn (partial sites-row app)]
-          (map row-fn (:sites @app))
-          )
-        ]]]]]])
+(defn navbar' [app]
+  (let [sites @(subscribe [:ecom/sites])
+        site-abbrev @(subscribe [:ecom/active-site-abbreviation])]
+    (net/log (str "Sites subscription: [" sites "]"))
+    [:div {:class "top-bar"}
+     [:div {:class "container-fluid"}
+      [:div {:class "row d-flex align-items-center"}
+       [:div {:class "col-lg-6 hidden-lg-down text-col"}
+        [:ul {:class "list-inline"}
+         [:li {:class "list-inline-item"}
+          [:i {:class "icon-telephone"}] "020-800-456-747"]
+         [:li {:class "list-inline-item"} "Free shipping on orders over $300"]]]
+       [:div {:class "col-lg-6 d-flex justify-content-end"}  ;<!-- Language Dropdown-->
+        [:div {:class "dropdown show"}
+         [:a {:id "langsDropdown", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
+          [:img {:src "img/united-kingdom.svg", :alt "english"}] "English"]
+         [:div {:aria-labelledby "langsDropdown", :class "dropdown-menu"}
+          [:a {:href "#", :class "dropdown-item"}
+           [:img {:src "img/germany.svg", :alt "german"}] "German"]
+          [:a {:href "#", :class "dropdown-item"}
+           [:img {:src "img/france.svg", :alt "french"}] "French"]]] ;"<!-- Currency Dropdown-->"
+        [:div {:class "dropdown show"}
+         [:a {:id "currencyDropdown", :href "#", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"} "USD"]
+         [:div {:aria-labelledby "currencyDropdown", :class "dropdown-menu"}
+          [:a {:href "#", :class "dropdown-item"} "EUR"]
+          [:a {:href "#", :class "dropdown-item"} "GBP"]]]
+        [:div {:class "dropdown show"}
+         [:a {:id "sitedropdown", :href "#", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"} site-abbrev] ;<--current site inside here...
+         [:div {:aria-labelledby "currencyDropdown", :class "dropdown-menu"}
+
+          (map sites-row sites)
+
+          ]]]]]])
+  )
 ;(count (:cart @app-state))
 ;        [:a {:href "#", :class "dropdown-item" :on-click #(fn [e] ((.preventDefault e) (change-site "s14839")))} "Groceries"]]]]]]])
 
-(defn calc-cart-item-total[app]
-  (reduce + (map (fn[item] (* (:price item) (:quantity item))) (vals (:cart @app))))
-  )
+;(defn calc-cart-item-total[app]
+;  (reduce + (map (fn[item] (* (:price item) (:quantity item))) (vals (:cart @app))))
+;  )
 
 (defn currency[val]
   (fmt/currency-format val)
@@ -159,9 +113,7 @@
 ;      (.format formatter date tz)
 ;      (.format formatter date))))
 
-(declare delete-cart-item)
-
-(defn mini-cart-row[app cart-item]
+(defn mini-cart-row[cart-item]
   (let [{:keys [:thumbnail :price :name :quantity :key :description :sku]} cart-item]
     ^{:key (str "mcr-" key)}
 [:div {:class "dropdown-item cart-product"}
@@ -175,177 +127,206 @@
     [:small (str "Quantity: " quantity)]
     [:span {:class "price"} (currency price)]]
    [:div {:class "delete"}
-    [:i {:class "fa fa-trash-o" :on-click #(delete-cart-item key app)}]]]]]
+    [:i {:class "fa fa-trash-o" :on-click #(dispatch [:ecom/remove-cart-item key])}]]]]]
 
     ))
 
-(defn menu'[app]
+(defn menu' [app]
 
-  [:nav {:class "navbar navbar-expand-lg"}
-   [:div {:class "search-area"}
-    [:div {:class "search-area-inner d-flex align-items-center justify-content-center"}
-     [:div {:class "close-btn"}
-      [:i {:class "icon-close"}]]
-     [:form {:action "#"}
-      [:div {:class "form-group"}
-       [:input {:type "search", :name "search", :id "search", :placeholder "What are you looking for?"}]
-       [:button {:type "submit", :class "submit"}
-        [:i {:class "icon-search"}]]]]]]
-   [:div {:class "container-fluid"}  ; "<!-- Navbar Header  -->"
-    [:a {:href "index.html", :class "navbar-brand"}
-     [:img {:src "https://www.fluentcommerce.com/wp-content/uploads/2017/11/logo.svg", :alt "F"}]] ;img/logo.png
-    [:button {:type "button", :data-toggle "collapse", :data-target "#navbarCollapse", :aria-controls "navbarCollapse", :aria-expanded "false", :aria-label "Toggle navigation", :class "navbar-toggler navbar-toggler-right"}
-     [:i {:class "fa fa-bars"}]] ;"<!-- Navbar Collapse -->"
-    [:div {:id "navbarCollapse", :class "collapse navbar-collapse"}
-     [:ul {:class "navbar-nav mx-auto"}
-      [:li {:class "nav-item"}
-       [:a {:href "#", :class "nav-link active"} "Home"]]
+  (let [cart-item-count @(subscribe [:ecom/cart-items-count])
+        cart-total @(subscribe [:ecom/cart-subtotal])
+        top-level-categories @(subscribe [:ecom/top-level-categories])
+        all-categories @(subscribe [:ecom/categories])
+        ]
+    [:nav {:class "navbar navbar-expand-lg"}
+     [:div {:class "search-area"}
+      [:div {:class "search-area-inner d-flex align-items-center justify-content-center"}
+       [:div {:class "close-btn"}
+        [:i {:class "icon-close"}]]
+       [:form {:action "#"}
+        [:div {:class "form-group"}
+         [:input {:type "search", :name "search", :id "search", :placeholder "What are you looking for?"}]
+         [:button {:type "submit", :class "submit"}
+          [:i {:class "icon-search"}]]]]]]
+     [:div {:class "container-fluid"}  ; "<!-- Navbar Header  -->"
+      [:a {:href "index.html", :class "navbar-brand"}
+       [:img {:src "https://www.fluentcommerce.com/wp-content/uploads/2017/11/logo.svg", :alt "F"}]] ;img/logo.png
+      [:button {:type "button", :data-toggle "collapse", :data-target "#navbarCollapse", :aria-controls "navbarCollapse", :aria-expanded "false", :aria-label "Toggle navigation", :class "navbar-toggler navbar-toggler-right"}
+       [:i {:class "fa fa-bars"}]] ;"<!-- Navbar Collapse -->"
+      [:div {:id "navbarCollapse", :class "collapse navbar-collapse"}
+       [:ul {:class "navbar-nav mx-auto"}
+        [:li {:class "nav-item"}
+         [:a {:href "#", :class "nav-link active"} "Home"]]
 
-      ;[:li {:class "nav-item"}
-      ; [:a {:href "category.html", :class "nav-link"} "Shop"]] ;"<!-- Megamenu-->"
-      ;
-      ;[:li {:class "nav-item dropdown menu-large"}
-      ; [:a {:href "#", :data-toggle "dropdown", :class "nav-link"} "Template"
-      ;  [:i {:class "fa fa-angle-down"}]]
-      ; [:div {:class "dropdown-menu megamenu"}
-      ;  [:div {:class "row"}
-      ;   [:div {:class "col-lg-9"}
-      ;    [:div {:class "row"}
-      ;     [:div {:class "col-lg-3"}
-      ;      [:strong {:class "text-uppercase"} "Home"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "index.html"} "Homepage 1"]]]
-      ;      [:strong {:class "text-uppercase"} "Shop"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "#categories"} "Category - left sidebar"]]
-      ;       [:li
-      ;        [:a {:href "category-right.html"} "Category - right sidebar"]]
-      ;       [:li
-      ;        [:a {:href "category-full.html"} "Category - full width"]]
-      ;       [:li
-      ;        [:a {:href "#hello"} "Product detail"]]]] ;detail.html
-      ;     [:div {:class "col-lg-3"}
-      ;      [:strong {:class "text-uppercase"} "Order process"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "#cart"} "Shopping cart"]]
-      ;       [:li
-      ;        [:a {:href "#checkout-address"} "Checkout 1 - Address"]]
-      ;       [:li
-      ;        [:a {:href "#checkout-shipping"} "Checkout 2 - Delivery"]]
-      ;       [:li
-      ;        [:a {:href "#checkout-payment"} "Checkout 3 - Payment"]]
-      ;       [:li
-      ;        [:a {:href "#checkout-summary"} "Checkout 4 - Confirmation"]]]
-      ;      [:strong {:class "text-uppercase"} "Blog"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "blog.html"} "Blog"]]
-      ;       [:li
-      ;        [:a {:href "post.html"} "Post"]]]]
-      ;     [:div {:class "col-lg-3"}
-      ;      [:strong {:class "text-uppercase"} "Pages"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "contact.html"} "Contact"]]
-      ;       [:li
-      ;        [:a {:href "about.html"} "About us"]]
-      ;       [:li
-      ;        [:a {:href "text.html"} "Text page"]]
-      ;       [:li
-      ;        [:a {:href "404.html"} "Error 404"]]
-      ;       [:li
-      ;        [:a {:href "500.html"} "Error 500"]]
-      ;       [:li "More coming soon"]]]
-      ;     [:div {:class "col-lg-3"}
-      ;      [:strong {:class "text-uppercase"} "Some more content"]
-      ;      [:ul {:class "list-unstyled"}
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]
-      ;       [:li
-      ;        [:a {:href "#"} "Demo content"]]]]]
-      ;    [:div {:class "row services-block"}
-      ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
-      ;      [:div {:class "item d-flex align-items-center"}
-      ;       [:div {:class "icon"}
-      ;        [:i {:class "icon-truck text-primary"}]]
-      ;       [:div {:class "text"}
-      ;        [:span {:class "text-uppercase"} "Free shipping &amp; return"]
-      ;        [:small "Free Shipping over $300"]]]]
-      ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
-      ;      [:div {:class "item d-flex align-items-center"}
-      ;       [:div {:class "icon"}
-      ;        [:i {:class "icon-coin text-primary"}]]
-      ;       [:div {:class "text"}
-      ;        [:span {:class "text-uppercase"} "Money back guarantee"]
-      ;        [:small "30 Days Money Back"]]]]
-      ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
-      ;      [:div {:class "item d-flex align-items-center"}
-      ;       [:div {:class "icon"}
-      ;        [:i {:class "icon-headphones text-primary"}]]
-      ;       [:div {:class "text"}
-      ;        [:span {:class "text-uppercase"} "020-800-456-747"]
-      ;        [:small "24/7 Available Support"]]]]
-      ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
-      ;      [:div {:class "item d-flex align-items-center"}
-      ;       [:div {:class "icon"}
-      ;        [:i {:class "icon-secure-shield text-primary"}]]
-      ;       [:div {:class "text"}
-      ;        [:span {:class "text-uppercase"} "Secure Payment"]
-      ;        [:small "Secure Payment"]]]]]]
-      ;   [:div {:class "col-lg-3 text-center product-col hidden-lg-down"}
-      ;    [:a {:href "detail.html", :class "product-image"}
-      ;     [:img {:src "img/shirt.png", :alt "...", :class "img-fluid"}]]
-      ;    [:h6 {:class "text-uppercase product-heading"}
-      ;     [:a {:href "detail.html"} "Lose Oversized Shirt"]]
-      ;    [:ul {:class "rate list-inline"}
-      ;     [:li {:class "list-inline-item"}
-      ;      [:i {:class "fa fa-star-o text-primary"}]]
-      ;     [:li {:class "list-inline-item"}
-      ;      [:i {:class "fa fa-star-o text-primary"}]]
-      ;     [:li {:class "list-inline-item"}
-      ;      [:i {:class "fa fa-star-o text-primary"}]]
-      ;     [:li {:class "list-inline-item"}
-      ;      [:i {:class "fa fa-star-o text-primary"}]]
-      ;     [:li {:class "list-inline-item"}
-      ;      [:i {:class "fa fa-star-o text-primary"}]]]
-      ;    [:strong {:class "price text-primary"} "$65.00"]
-      ;    [:a {:href "#", :class "btn btn-template wide"} "Add to cart"]]]]]
+        ;[:li {:class "nav-item"}
+        ; [:a {:href "category.html", :class "nav-link"} "Shop"]] ;"<!-- Megamenu-->"
+        ;
+        ;[:li {:class "nav-item dropdown menu-large"}
+        ; [:a {:href "#", :data-toggle "dropdown", :class "nav-link"} "Template"
+        ;  [:i {:class "fa fa-angle-down"}]]
+        ; [:div {:class "dropdown-menu megamenu"}
+        ;  [:div {:class "row"}
+        ;   [:div {:class "col-lg-9"}
+        ;    [:div {:class "row"}
+        ;     [:div {:class "col-lg-3"}
+        ;      [:strong {:class "text-uppercase"} "Home"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "index.html"} "Homepage 1"]]]
+        ;      [:strong {:class "text-uppercase"} "Shop"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "#categories"} "Category - left sidebar"]]
+        ;       [:li
+        ;        [:a {:href "category-right.html"} "Category - right sidebar"]]
+        ;       [:li
+        ;        [:a {:href "category-full.html"} "Category - full width"]]
+        ;       [:li
+        ;        [:a {:href "#hello"} "Product detail"]]]] ;detail.html
+        ;     [:div {:class "col-lg-3"}
+        ;      [:strong {:class "text-uppercase"} "Order process"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "#cart"} "Shopping cart"]]
+        ;       [:li
+        ;        [:a {:href "#checkout-address"} "Checkout 1 - Address"]]
+        ;       [:li
+        ;        [:a {:href "#checkout-shipping"} "Checkout 2 - Delivery"]]
+        ;       [:li
+        ;        [:a {:href "#checkout-payment"} "Checkout 3 - Payment"]]
+        ;       [:li
+        ;        [:a {:href "#checkout-summary"} "Checkout 4 - Confirmation"]]]
+        ;      [:strong {:class "text-uppercase"} "Blog"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "blog.html"} "Blog"]]
+        ;       [:li
+        ;        [:a {:href "post.html"} "Post"]]]]
+        ;     [:div {:class "col-lg-3"}
+        ;      [:strong {:class "text-uppercase"} "Pages"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "contact.html"} "Contact"]]
+        ;       [:li
+        ;        [:a {:href "about.html"} "About us"]]
+        ;       [:li
+        ;        [:a {:href "text.html"} "Text page"]]
+        ;       [:li
+        ;        [:a {:href "404.html"} "Error 404"]]
+        ;       [:li
+        ;        [:a {:href "500.html"} "Error 500"]]
+        ;       [:li "More coming soon"]]]
+        ;     [:div {:class "col-lg-3"}
+        ;      [:strong {:class "text-uppercase"} "Some more content"]
+        ;      [:ul {:class "list-unstyled"}
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]
+        ;       [:li
+        ;        [:a {:href "#"} "Demo content"]]]]]
+        ;    [:div {:class "row services-block"}
+        ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
+        ;      [:div {:class "item d-flex align-items-center"}
+        ;       [:div {:class "icon"}
+        ;        [:i {:class "icon-truck text-primary"}]]
+        ;       [:div {:class "text"}
+        ;        [:span {:class "text-uppercase"} "Free shipping &amp; return"]
+        ;        [:small "Free Shipping over $300"]]]]
+        ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
+        ;      [:div {:class "item d-flex align-items-center"}
+        ;       [:div {:class "icon"}
+        ;        [:i {:class "icon-coin text-primary"}]]
+        ;       [:div {:class "text"}
+        ;        [:span {:class "text-uppercase"} "Money back guarantee"]
+        ;        [:small "30 Days Money Back"]]]]
+        ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
+        ;      [:div {:class "item d-flex align-items-center"}
+        ;       [:div {:class "icon"}
+        ;        [:i {:class "icon-headphones text-primary"}]]
+        ;       [:div {:class "text"}
+        ;        [:span {:class "text-uppercase"} "020-800-456-747"]
+        ;        [:small "24/7 Available Support"]]]]
+        ;     [:div {:class "col-xl-3 col-lg-6 d-flex"}
+        ;      [:div {:class "item d-flex align-items-center"}
+        ;       [:div {:class "icon"}
+        ;        [:i {:class "icon-secure-shield text-primary"}]]
+        ;       [:div {:class "text"}
+        ;        [:span {:class "text-uppercase"} "Secure Payment"]
+        ;        [:small "Secure Payment"]]]]]]
+        ;   [:div {:class "col-lg-3 text-center product-col hidden-lg-down"}
+        ;    [:a {:href "detail.html", :class "product-image"}
+        ;     [:img {:src "img/shirt.png", :alt "...", :class "img-fluid"}]]
+        ;    [:h6 {:class "text-uppercase product-heading"}
+        ;     [:a {:href "detail.html"} "Lose Oversized Shirt"]]
+        ;    [:ul {:class "rate list-inline"}
+        ;     [:li {:class "list-inline-item"}
+        ;      [:i {:class "fa fa-star-o text-primary"}]]
+        ;     [:li {:class "list-inline-item"}
+        ;      [:i {:class "fa fa-star-o text-primary"}]]
+        ;     [:li {:class "list-inline-item"}
+        ;      [:i {:class "fa fa-star-o text-primary"}]]
+        ;     [:li {:class "list-inline-item"}
+        ;      [:i {:class "fa fa-star-o text-primary"}]]
+        ;     [:li {:class "list-inline-item"}
+        ;      [:i {:class "fa fa-star-o text-primary"}]]]
+        ;    [:strong {:class "price text-primary"} "$65.00"]
+        ;    [:a {:href "#", :class "btn btn-template wide"} "Add to cart"]]]]]
 
-      ;"<!-- /Megamenu end-->"
-      ; ;"<!-- Multi level dropdown    -->"
-      ;TODO generalize this for multi-level drop downs - quick hack to do single level menu
-      (for [category (ds/find-category-by-parent nil)]
-        ^{:key (str (gensym "tn-"))}
-        [:li {:class "nav-item dropdown"}
-         [:a {:id            "navbarDropdownMenuLink", :href "http://example.com", :data-toggle "dropdown",
-              :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} (:name category)
-          [:i {:class "fa fa-angle-down"}]]
+        ;"<!-- /Megamenu end-->"
+        ; ;"<!-- Multi level dropdown    -->"
+        ;TODO generalize this for multi-level drop downs - quick hack to do single level menu
+        (for [category top-level-categories]
+          ^{:key (str (gensym "tn-"))}
+          [:li {:class "nav-item dropdown"}
+           [:a {:id            "navbarDropdownMenuLink", :href "http://example.com", :data-toggle "dropdown",
+                :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} (:name category)
+            [:i {:class "fa fa-angle-down"}]]
 
-         [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
+           [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
 
-          (for [child (concat (ds/find-category-by-parent (:ref category))
-                              [{:id (:id category) :name (str "Shop all " (:name category))}])]
-            ^{:key (str (gensym "cn-"))}
-            [:li
-             [:a {:href (str "#categories/" (:id child)), :class "dropdown-item"} (:name child)]]
+            (for [child (concat @(subscribe [:ecom/category-by-parent (:ref category)])
+                                [{:id (:id category) :name (str "Shop all " (:name category))}])]
+              ^{:key (str (gensym "cn-"))}
+              [:li
+               [:a {:href (str "#categories/" (:id child)), :class "dropdown-item"} (:name child)]]
 
 
-            ;TODO use this template to create a diffrent [:li structure if it's a nested category
+              ;TODO use this template to create a diffrent [:li structure if it's a nested category
+              ;[:li {:class "dropdown-submenu"}
+              ; [:a {:id "navbarDropdownMenuLink2", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown link"
+              ;  [:i {:class "fa fa-angle-down"}]]
+              ; [:ul {:aria-labelledby "navbarDropdownMenuLink2", :class "dropdown-menu"}
+              ;  [:li
+              ;   [:a {:href "#", :class "dropdown-item"} "Action"]]
+              ;  [:li {:class "dropdown-submenu"}
+              ;   [:a {:id "navbarDropdownMenuLink3", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Another action"
+              ;    [:i {:class "fa fa-angle-down"}]]
+              ;   [:ul {:aria-labelledby "navbarDropdownMenuLink3", :class "dropdown-menu"}
+              ;    [:li
+              ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
+              ;    ]]
+              ;]]
+
+              ;[:li
+              ; [:a {:href "#categories/c-003", :class "dropdown-item"} "Earrings"]]
+              ;[:li
+              ; [:a {:href "#categories/c-004", :class "dropdown-item"} "Bracelets"]]
+              ;[:li
+              ; [:a {:href "#categories/c-001", :class "dropdown-item"} "Shop All Jewelery"]
+              ; ]
+              )
+
             ;[:li {:class "dropdown-submenu"}
             ; [:a {:id "navbarDropdownMenuLink2", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown link"
             ;  [:i {:class "fa fa-angle-down"}]]
@@ -358,307 +339,285 @@
             ;   [:ul {:aria-labelledby "navbarDropdownMenuLink3", :class "dropdown-menu"}
             ;    [:li
             ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
-            ;    ]]
-            ;]]
+            ;    [:li
+            ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
+            ;    [:li
+            ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
+            ;    [:li
+            ;     [:a {:href "#", :class "dropdown-item"} "Action"]]]]
+            ;  [:li
+            ;   [:a {:href "#", :class "dropdown-item"} "Something else here"]]]]
 
-            ;[:li
-            ; [:a {:href "#categories/c-003", :class "dropdown-item"} "Earrings"]]
-            ;[:li
-            ; [:a {:href "#categories/c-004", :class "dropdown-item"} "Bracelets"]]
-            ;[:li
-            ; [:a {:href "#categories/c-001", :class "dropdown-item"} "Shop All Jewelery"]
-            ; ]
-            )
+            ]
+           ] ;"<!-- Multi level dropdown end-->"
 
-          ;[:li {:class "dropdown-submenu"}
-          ; [:a {:id "navbarDropdownMenuLink2", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown link"
-          ;  [:i {:class "fa fa-angle-down"}]]
-          ; [:ul {:aria-labelledby "navbarDropdownMenuLink2", :class "dropdown-menu"}
-          ;  [:li
-          ;   [:a {:href "#", :class "dropdown-item"} "Action"]]
-          ;  [:li {:class "dropdown-submenu"}
-          ;   [:a {:id "navbarDropdownMenuLink3", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Another action"
-          ;    [:i {:class "fa fa-angle-down"}]]
-          ;   [:ul {:aria-labelledby "navbarDropdownMenuLink3", :class "dropdown-menu"}
-          ;    [:li
-          ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
-          ;    [:li
-          ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
-          ;    [:li
-          ;     [:a {:href "#", :class "dropdown-item"} "Action"]]
-          ;    [:li
-          ;     [:a {:href "#", :class "dropdown-item"} "Action"]]]]
-          ;  [:li
-          ;   [:a {:href "#", :class "dropdown-item"} "Something else here"]]]]
-
-          ]
-         ] ;"<!-- Multi level dropdown end-->"
-
-        )
-      ;[:li {:class "nav-item dropdown"}
-      ; [:a {:id "navbarDropdownMenuLink", :href "http://example.com",
-      ;      :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false",
-      ;      :class "nav-link"} "Apparel"
-      ;  [:i {:class "fa fa-angle-down"}]]
-      ; [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
-      ;  [:li ]
-      ;  [:li
-      ;   [:a {:href "#categories/c-011", :class "dropdown-item"} "Shirts"]]
-      ;  [:li
-      ;   [:a {:href "#categories/c-010", :class "dropdown-item"} "Shop All Apparel"]]
-      ;  ]]
-
-      ;[:li {:class "nav-item"}
-      ; [:a {:href "blog.html", :class "nav-link"} "Blog "]]
-      ;[:li {:class "nav-item"}
-      ; [:a {:href "contact.html", :class "nav-link"} "Contact"]]
-      ]
-     [:div {:class "right-col d-flex align-items-lg-center flex-column flex-lg-row"}  ;"<!-- Search Button-->"
-      [:div {:class "search"}
-       [:i {:class "icon-search"}]] ;"<!-- User Dropdown-->"
-      [:div {:class "user dropdown show"}
-       [:a {:id "userdetails", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
-        [:i {:class "icon-profile"}]]
-       [:ul {:aria-labelledby "userdetails", :class "dropdown-menu"}
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Profile       "]]
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Orders       "]]
-        [:li {:class "dropdown-divider"} "     "]
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
-      [:div {:class "cart dropdown show"}
-       [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
-        [:i {:class "icon-cart"}]
-        [:div {:class "cart-no"} (reduce + (map :quantity (vals (:cart @app))))]]
-       [:a {:href "#cart", :class "text-primary view-cart"} "View Cart"]
-       [:div {:aria-labelledby "cartdetails", :class "dropdown-menu"}  ;"<!-- cart item-->"
-[:div {:style {:overflow "auto" :height "280px"}}
-        (let [make-row (partial mini-cart-row app)]
-          (map make-row (vals (:cart @app)))
           )
-]
-        [:div {:class "dropdown-item total-price d-flex justify-content-between"}
-         [:span "Total"]
-         [:strong {:class "text-primary"} (currency (calc-cart-item-total app))]] ;"<!-- call to actions-->"
+        ;[:li {:class "nav-item dropdown"}
+        ; [:a {:id "navbarDropdownMenuLink", :href "http://example.com",
+        ;      :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false",
+        ;      :class "nav-link"} "Apparel"
+        ;  [:i {:class "fa fa-angle-down"}]]
+        ; [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
+        ;  [:li ]
+        ;  [:li
+        ;   [:a {:href "#categories/c-011", :class "dropdown-item"} "Shirts"]]
+        ;  [:li
+        ;   [:a {:href "#categories/c-010", :class "dropdown-item"} "Shop All Apparel"]]
+        ;  ]]
 
-        [:div {:class "dropdown-item CTA d-flex"}
-         [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
-         [:a {:href "#checkout-delivery", :class "btn btn-template wide"} "Checkout"]]]]]]]])
-(def menu
-  [:nav {:class "navbar navbar-expand-lg"}
-   [:div {:class "search-area"}
-    [:div {:class "search-area-inner d-flex align-items-center justify-content-center"}
-     [:div {:class "close-btn"}
-      [:i {:class "icon-close"}]]
-     [:form {:action "#"}
-      [:div {:class "form-group"}
-       [:input {:type "search", :name "search", :id "search", :placeholder "What are you looking for?"}]
-       [:button {:type "submit", :class "submit"}
-        [:i {:class "icon-search"}]]]]]]
-   [:div {:class "container-fluid"}  ; "<!-- Navbar Header  -->"
-    [:a {:href "index.html", :class "navbar-brand"}
-     [:img {:src "https://fluentcommerce.com/assets/images/fluentcommerce.svg", :alt "..."}]] ;img/logo.png
-    [:button {:type "button", :data-toggle "collapse", :data-target "#navbarCollapse", :aria-controls "navbarCollapse", :aria-expanded "false", :aria-label "Toggle navigation", :class "navbar-toggler navbar-toggler-right"}
-     [:i {:class "fa fa-bars"}]] ;"<!-- Navbar Collapse -->"
-    [:div {:id "navbarCollapse", :class "collapse navbar-collapse"}
-     [:ul {:class "navbar-nav mx-auto"}
-      [:li {:class "nav-item"}
-       [:a {:href "index.html", :class "nav-link active"} "Home"]]
-      [:li {:class "nav-item"}
-       [:a {:href "category.html", :class "nav-link"} "Shop"]] ;"<!-- Megamenu-->"
-      [:li {:class "nav-item dropdown menu-large"}
-       [:a {:href "#", :data-toggle "dropdown", :class "nav-link"} "Template"
-        [:i {:class "fa fa-angle-down"}]]
-       [:div {:class "dropdown-menu megamenu"}
-        [:div {:class "row"}
-         [:div {:class "col-lg-9"}
-          [:div {:class "row"}
-           [:div {:class "col-lg-3"}
-            [:strong {:class "text-uppercase"} "Home"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "index.html"} "Homepage 1"]]]
-            [:strong {:class "text-uppercase"} "Shop"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "#categories"} "Category - left sidebar"]]
-             [:li
-              [:a {:href "category-right.html"} "Category - right sidebar"]]
-             [:li
-              [:a {:href "category-full.html"} "Category - full width"]]
-             [:li
-              [:a {:href "#hello"} "Product detail"]]]] ;detail.html
-           [:div {:class "col-lg-3"}
-            [:strong {:class "text-uppercase"} "Order process"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "#cart"} "Shopping cart"]]
-             [:li
-              [:a {:href "#checkout-address"} "Checkout 1 - Address"]]
-             [:li
-              [:a {:href "#checkout-shipping"} "Checkout 2 - Delivery"]]
-             [:li
-              [:a {:href "#checkout-payment"} "Checkout 3 - Payment"]]
-             [:li
-              [:a {:href "#checkout-summary"} "Checkout 4 - Confirmation"]]]
-            [:strong {:class "text-uppercase"} "Blog"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "blog.html"} "Blog"]]
-             [:li
-              [:a {:href "post.html"} "Post"]]]]
-           [:div {:class "col-lg-3"}
-            [:strong {:class "text-uppercase"} "Pages"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "contact.html"} "Contact"]]
-             [:li
-              [:a {:href "about.html"} "About us"]]
-             [:li
-              [:a {:href "text.html"} "Text page"]]
-             [:li
-              [:a {:href "404.html"} "Error 404"]]
-             [:li
-              [:a {:href "500.html"} "Error 500"]]
-             [:li "More coming soon"]]]
-           [:div {:class "col-lg-3"}
-            [:strong {:class "text-uppercase"} "Some more content"]
-            [:ul {:class "list-unstyled"}
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]
-             [:li
-              [:a {:href "#"} "Demo content"]]]]]
-          [:div {:class "row services-block"}
-           [:div {:class "col-xl-3 col-lg-6 d-flex"}
-            [:div {:class "item d-flex align-items-center"}
-             [:div {:class "icon"}
-              [:i {:class "icon-truck text-primary"}]]
-             [:div {:class "text"}
-              [:span {:class "text-uppercase"} "Free shipping &amp; return"]
-              [:small "Free Shipping over $300"]]]]
-           [:div {:class "col-xl-3 col-lg-6 d-flex"}
-            [:div {:class "item d-flex align-items-center"}
-             [:div {:class "icon"}
-              [:i {:class "icon-coin text-primary"}]]
-             [:div {:class "text"}
-              [:span {:class "text-uppercase"} "Money back guarantee"]
-              [:small "30 Days Money Back"]]]]
-           [:div {:class "col-xl-3 col-lg-6 d-flex"}
-            [:div {:class "item d-flex align-items-center"}
-             [:div {:class "icon"}
-              [:i {:class "icon-headphones text-primary"}]]
-             [:div {:class "text"}
-              [:span {:class "text-uppercase"} "020-800-456-747"]
-              [:small "24/7 Available Support"]]]]
-           [:div {:class "col-xl-3 col-lg-6 d-flex"}
-            [:div {:class "item d-flex align-items-center"}
-             [:div {:class "icon"}
-              [:i {:class "icon-secure-shield text-primary"}]]
-             [:div {:class "text"}
-              [:span {:class "text-uppercase"} "Secure Payment"]
-              [:small "Secure Payment"]]]]]]
-         [:div {:class "col-lg-3 text-center product-col hidden-lg-down"}
-          [:a {:href "detail.html", :class "product-image"}
-           [:img {:src "img/shirt.png", :alt "...", :class "img-fluid"}]]
-          [:h6 {:class "text-uppercase product-heading"}
-           [:a {:href "detail.html"} "Lose Oversized Shirt"]]
-          [:ul {:class "rate list-inline"}
-           [:li {:class "list-inline-item"}
-            [:i {:class "fa fa-star-o text-primary"}]]
-           [:li {:class "list-inline-item"}
-            [:i {:class "fa fa-star-o text-primary"}]]
-           [:li {:class "list-inline-item"}
-            [:i {:class "fa fa-star-o text-primary"}]]
-           [:li {:class "list-inline-item"}
-            [:i {:class "fa fa-star-o text-primary"}]]
-           [:li {:class "list-inline-item"}
-            [:i {:class "fa fa-star-o text-primary"}]]]
-          [:strong {:class "price text-primary"} "$65.00"]
-          [:a {:href "#", :class "btn btn-template wide"} "Add to cart"]]]]] ;"<!-- /Megamenu end-->"
-      ; ;"<!-- Multi level dropdown    -->"
-      [:li {:class "nav-item dropdown"}
-       [:a {:id "navbarDropdownMenuLink", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown"
-        [:i {:class "fa fa-angle-down"}]]
-       [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
-        [:li
-         [:a {:href "#", :class "dropdown-item"} "Action"]]
-        [:li
-         [:a {:href "#", :class "dropdown-item"} "Another action"]]
-        [:li {:class "dropdown-submenu"}
-         [:a {:id "navbarDropdownMenuLink2", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown link"
-          [:i {:class "fa fa-angle-down"}]]
-         [:ul {:aria-labelledby "navbarDropdownMenuLink2", :class "dropdown-menu"}
-          [:li
-           [:a {:href "#", :class "dropdown-item"} "Action"]]
-          [:li {:class "dropdown-submenu"}
-           [:a {:id "navbarDropdownMenuLink3", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "\n                          Another action"
-            [:i {:class "fa fa-angle-down"}]]
-           [:ul {:aria-labelledby "navbarDropdownMenuLink3", :class "dropdown-menu"}
-            [:li
-             [:a {:href "#", :class "dropdown-item"} "Action"]]
-            [:li
-             [:a {:href "#", :class "dropdown-item"} "Action"]]
-            [:li
-             [:a {:href "#", :class "dropdown-item"} "Action"]]
-            [:li
-             [:a {:href "#", :class "dropdown-item"} "Action"]]]]
-          [:li
-           [:a {:href "#", :class "dropdown-item"} "Something else here"]]]]]] ;"<!-- Multi level dropdown end-->"
-      [:li {:class "nav-item"}
-       [:a {:href "blog.html", :class "nav-link"} "Blog "]]
-      [:li {:class "nav-item"}
-       [:a {:href "contact.html", :class "nav-link"} "Contact"]]]
-     [:div {:class "right-col d-flex align-items-lg-center flex-column flex-lg-row"}  ;"<!-- Search Button-->"
-      [:div {:class "search"}
-       [:i {:class "icon-search"}]] ;"<!-- User Dropdown-->"
-      [:div {:class "user dropdown show"}
-       [:a {:id "userdetails", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
-        [:i {:class "icon-profile"}]]
-       [:ul {:aria-labelledby "userdetails", :class "dropdown-menu"}
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Profile       "]]
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Orders       "]]
-        [:li {:class "dropdown-divider"} "     "]
-        [:li {:class "dropdown-item"}
-         [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
-      [:div {:class "cart dropdown show"}
-       [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
-        [:i {:class "icon-cart"}]
-        [:div {:class "cart-no"} "1"]]
-       [:a {:href "#cart", :class "text-primary view-cart"} "View Cart"]
-       [:div {:aria-labelledby "cartdetails", :class "dropdown-menu"}  ;"<!-- cart item-->"
-        [:div {:class "dropdown-item cart-product"}
-         [:div {:class "d-flex align-items-center"}
-          [:div {:class "img"}
-           [:img {:src "img/hoodie-man-1.png", :alt "...", :class "img-fluid"}]]
-          [:div {:class "details d-flex justify-content-between"}
-           [:div {:class "text"}
-            [:a {:href "#"}
-             [:strong "Heather Gray Hoodie"]]
-            [:small "Quantity: 1 "]
-            [:span {:class "price"} "$75.00 "]]
-           [:div {:class "delete"}
-            [:i {:class "fa fa-trash-o"}]]]]] ;"<!-- total price-->"
-        [:div {:class "dropdown-item total-price d-flex justify-content-between"}
-         [:span "Total"]
-         [:strong {:class "text-primary"} "$75.00"]] ;"<!-- call to actions-->"
-        [:div {:class "dropdown-item CTA d-flex"}
-         [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
-         [:a {:href "#checkout-address", :class "btn btn-template wide"} "Checkout"]]]]]]]])
+        ;[:li {:class "nav-item"}
+        ; [:a {:href "blog.html", :class "nav-link"} "Blog "]]
+        ;[:li {:class "nav-item"}
+        ; [:a {:href "contact.html", :class "nav-link"} "Contact"]]
+        ]
+       [:div {:class "right-col d-flex align-items-lg-center flex-column flex-lg-row"}  ;"<!-- Search Button-->"
+        [:div {:class "search"}
+         [:i {:class "icon-search"}]] ;"<!-- User Dropdown-->"
+        [:div {:class "user dropdown show"}
+         [:a {:id "userdetails", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
+          [:i {:class "icon-profile"}]]
+         [:ul {:aria-labelledby "userdetails", :class "dropdown-menu"}
+          [:li {:class "dropdown-item"}
+           [:a {:href "#"} "Profile       "]]
+          [:li {:class "dropdown-item"}
+           [:a {:href "#"} "Orders       "]]
+          [:li {:class "dropdown-divider"} "     "]
+          [:li {:class "dropdown-item"}
+           [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
+        [:div {:class "cart dropdown show"}
+         [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
+          [:i {:class "icon-cart"}]
+          [:div {:class "cart-no"} cart-item-count ]] ;(reduce + (map :quantity (vals (:cart @app))))
+         [:a {:href "#cart", :class "text-primary view-cart"} "View Cart"]
+         [:div {:aria-labelledby "cartdetails", :class "dropdown-menu"}  ;"<!-- cart item-->"
+          [:div {:style {:overflow "auto" :height "280px"}}
+           (let [cart-items @(subscribe [:ecom/cart-items])]
+             (map mini-cart-row cart-items)
+             )
+           ]
+          [:div {:class "dropdown-item total-price d-flex justify-content-between"}
+           [:span "Total"]
+           [:strong {:class "text-primary"} (currency cart-total)]] ;"<!-- call to actions-->"
+
+          [:div {:class "dropdown-item CTA d-flex"}
+           [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
+           [:a {:href "#checkout-delivery", :class "btn btn-template wide"} "Checkout"]]]]]]]])
+  )
+
+;(def menu
+;  [:nav {:class "navbar navbar-expand-lg"}
+;   [:div {:class "search-area"}
+;    [:div {:class "search-area-inner d-flex align-items-center justify-content-center"}
+;     [:div {:class "close-btn"}
+;      [:i {:class "icon-close"}]]
+;     [:form {:action "#"}
+;      [:div {:class "form-group"}
+;       [:input {:type "search", :name "search", :id "search", :placeholder "What are you looking for?"}]
+;       [:button {:type "submit", :class "submit"}
+;        [:i {:class "icon-search"}]]]]]]
+;   [:div {:class "container-fluid"}  ; "<!-- Navbar Header  -->"
+;    [:a {:href "index.html", :class "navbar-brand"}
+;     [:img {:src "https://fluentcommerce.com/assets/images/fluentcommerce.svg", :alt "..."}]] ;img/logo.png
+;    [:button {:type "button", :data-toggle "collapse", :data-target "#navbarCollapse", :aria-controls "navbarCollapse", :aria-expanded "false", :aria-label "Toggle navigation", :class "navbar-toggler navbar-toggler-right"}
+;     [:i {:class "fa fa-bars"}]] ;"<!-- Navbar Collapse -->"
+;    [:div {:id "navbarCollapse", :class "collapse navbar-collapse"}
+;     [:ul {:class "navbar-nav mx-auto"}
+;      [:li {:class "nav-item"}
+;       [:a {:href "index.html", :class "nav-link active"} "Home"]]
+;      [:li {:class "nav-item"}
+;       [:a {:href "category.html", :class "nav-link"} "Shop"]] ;"<!-- Megamenu-->"
+;      [:li {:class "nav-item dropdown menu-large"}
+;       [:a {:href "#", :data-toggle "dropdown", :class "nav-link"} "Template"
+;        [:i {:class "fa fa-angle-down"}]]
+;       [:div {:class "dropdown-menu megamenu"}
+;        [:div {:class "row"}
+;         [:div {:class "col-lg-9"}
+;          [:div {:class "row"}
+;           [:div {:class "col-lg-3"}
+;            [:strong {:class "text-uppercase"} "Home"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "index.html"} "Homepage 1"]]]
+;            [:strong {:class "text-uppercase"} "Shop"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "#categories"} "Category - left sidebar"]]
+;             [:li
+;              [:a {:href "category-right.html"} "Category - right sidebar"]]
+;             [:li
+;              [:a {:href "category-full.html"} "Category - full width"]]
+;             [:li
+;              [:a {:href "#hello"} "Product detail"]]]] ;detail.html
+;           [:div {:class "col-lg-3"}
+;            [:strong {:class "text-uppercase"} "Order process"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "#cart"} "Shopping cart"]]
+;             [:li
+;              [:a {:href "#checkout-address"} "Checkout 1 - Address"]]
+;             [:li
+;              [:a {:href "#checkout-shipping"} "Checkout 2 - Delivery"]]
+;             [:li
+;              [:a {:href "#checkout-payment"} "Checkout 3 - Payment"]]
+;             [:li
+;              [:a {:href "#checkout-summary"} "Checkout 4 - Confirmation"]]]
+;            [:strong {:class "text-uppercase"} "Blog"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "blog.html"} "Blog"]]
+;             [:li
+;              [:a {:href "post.html"} "Post"]]]]
+;           [:div {:class "col-lg-3"}
+;            [:strong {:class "text-uppercase"} "Pages"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "contact.html"} "Contact"]]
+;             [:li
+;              [:a {:href "about.html"} "About us"]]
+;             [:li
+;              [:a {:href "text.html"} "Text page"]]
+;             [:li
+;              [:a {:href "404.html"} "Error 404"]]
+;             [:li
+;              [:a {:href "500.html"} "Error 500"]]
+;             [:li "More coming soon"]]]
+;           [:div {:class "col-lg-3"}
+;            [:strong {:class "text-uppercase"} "Some more content"]
+;            [:ul {:class "list-unstyled"}
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]
+;             [:li
+;              [:a {:href "#"} "Demo content"]]]]]
+;          [:div {:class "row services-block"}
+;           [:div {:class "col-xl-3 col-lg-6 d-flex"}
+;            [:div {:class "item d-flex align-items-center"}
+;             [:div {:class "icon"}
+;              [:i {:class "icon-truck text-primary"}]]
+;             [:div {:class "text"}
+;              [:span {:class "text-uppercase"} "Free shipping &amp; return"]
+;              [:small "Free Shipping over $300"]]]]
+;           [:div {:class "col-xl-3 col-lg-6 d-flex"}
+;            [:div {:class "item d-flex align-items-center"}
+;             [:div {:class "icon"}
+;              [:i {:class "icon-coin text-primary"}]]
+;             [:div {:class "text"}
+;              [:span {:class "text-uppercase"} "Money back guarantee"]
+;              [:small "30 Days Money Back"]]]]
+;           [:div {:class "col-xl-3 col-lg-6 d-flex"}
+;            [:div {:class "item d-flex align-items-center"}
+;             [:div {:class "icon"}
+;              [:i {:class "icon-headphones text-primary"}]]
+;             [:div {:class "text"}
+;              [:span {:class "text-uppercase"} "020-800-456-747"]
+;              [:small "24/7 Available Support"]]]]
+;           [:div {:class "col-xl-3 col-lg-6 d-flex"}
+;            [:div {:class "item d-flex align-items-center"}
+;             [:div {:class "icon"}
+;              [:i {:class "icon-secure-shield text-primary"}]]
+;             [:div {:class "text"}
+;              [:span {:class "text-uppercase"} "Secure Payment"]
+;              [:small "Secure Payment"]]]]]]
+;         [:div {:class "col-lg-3 text-center product-col hidden-lg-down"}
+;          [:a {:href "detail.html", :class "product-image"}
+;           [:img {:src "img/shirt.png", :alt "...", :class "img-fluid"}]]
+;          [:h6 {:class "text-uppercase product-heading"}
+;           [:a {:href "detail.html"} "Lose Oversized Shirt"]]
+;          [:ul {:class "rate list-inline"}
+;           [:li {:class "list-inline-item"}
+;            [:i {:class "fa fa-star-o text-primary"}]]
+;           [:li {:class "list-inline-item"}
+;            [:i {:class "fa fa-star-o text-primary"}]]
+;           [:li {:class "list-inline-item"}
+;            [:i {:class "fa fa-star-o text-primary"}]]
+;           [:li {:class "list-inline-item"}
+;            [:i {:class "fa fa-star-o text-primary"}]]
+;           [:li {:class "list-inline-item"}
+;            [:i {:class "fa fa-star-o text-primary"}]]]
+;          [:strong {:class "price text-primary"} "$65.00"]
+;          [:a {:href "#", :class "btn btn-template wide"} "Add to cart"]]]]] ;"<!-- /Megamenu end-->"
+;      ; ;"<!-- Multi level dropdown    -->"
+;      [:li {:class "nav-item dropdown"}
+;       [:a {:id "navbarDropdownMenuLink", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown"
+;        [:i {:class "fa fa-angle-down"}]]
+;       [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
+;        [:li
+;         [:a {:href "#", :class "dropdown-item"} "Action"]]
+;        [:li
+;         [:a {:href "#", :class "dropdown-item"} "Another action"]]
+;        [:li {:class "dropdown-submenu"}
+;         [:a {:id "navbarDropdownMenuLink2", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "Dropdown link"
+;          [:i {:class "fa fa-angle-down"}]]
+;         [:ul {:aria-labelledby "navbarDropdownMenuLink2", :class "dropdown-menu"}
+;          [:li
+;           [:a {:href "#", :class "dropdown-item"} "Action"]]
+;          [:li {:class "dropdown-submenu"}
+;           [:a {:id "navbarDropdownMenuLink3", :href "http://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "nav-link"} "\n                          Another action"
+;            [:i {:class "fa fa-angle-down"}]]
+;           [:ul {:aria-labelledby "navbarDropdownMenuLink3", :class "dropdown-menu"}
+;            [:li
+;             [:a {:href "#", :class "dropdown-item"} "Action"]]
+;            [:li
+;             [:a {:href "#", :class "dropdown-item"} "Action"]]
+;            [:li
+;             [:a {:href "#", :class "dropdown-item"} "Action"]]
+;            [:li
+;             [:a {:href "#", :class "dropdown-item"} "Action"]]]]
+;          [:li
+;           [:a {:href "#", :class "dropdown-item"} "Something else here"]]]]]] ;"<!-- Multi level dropdown end-->"
+;      [:li {:class "nav-item"}
+;       [:a {:href "blog.html", :class "nav-link"} "Blog "]]
+;      [:li {:class "nav-item"}
+;       [:a {:href "contact.html", :class "nav-link"} "Contact"]]]
+;     [:div {:class "right-col d-flex align-items-lg-center flex-column flex-lg-row"}  ;"<!-- Search Button-->"
+;      [:div {:class "search"}
+;       [:i {:class "icon-search"}]] ;"<!-- User Dropdown-->"
+;      [:div {:class "user dropdown show"}
+;       [:a {:id "userdetails", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
+;        [:i {:class "icon-profile"}]]
+;       [:ul {:aria-labelledby "userdetails", :class "dropdown-menu"}
+;        [:li {:class "dropdown-item"}
+;         [:a {:href "#"} "Profile       "]]
+;        [:li {:class "dropdown-item"}
+;         [:a {:href "#"} "Orders       "]]
+;        [:li {:class "dropdown-divider"} "     "]
+;        [:li {:class "dropdown-item"}
+;         [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
+;      [:div {:class "cart dropdown show"}
+;       [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
+;        [:i {:class "icon-cart"}]
+;        [:div {:class "cart-no"} "1"]]
+;       [:a {:href "#cart", :class "text-primary view-cart"} "View Cart"]
+;       [:div {:aria-labelledby "cartdetails", :class "dropdown-menu"}  ;"<!-- cart item-->"
+;        [:div {:class "dropdown-item cart-product"}
+;         [:div {:class "d-flex align-items-center"}
+;          [:div {:class "img"}
+;           [:img {:src "img/hoodie-man-1.png", :alt "...", :class "img-fluid"}]]
+;          [:div {:class "details d-flex justify-content-between"}
+;           [:div {:class "text"}
+;            [:a {:href "#"}
+;             [:strong "Heather Gray Hoodie"]]
+;            [:small "Quantity: 1 "]
+;            [:span {:class "price"} "$75.00 "]]
+;           [:div {:class "delete"}
+;            [:i {:class "fa fa-trash-o"}]]]]] ;"<!-- total price-->"
+;        [:div {:class "dropdown-item total-price d-flex justify-content-between"}
+;         [:span "Total"]
+;         [:strong {:class "text-primary"} "$75.00"]] ;"<!-- call to actions-->"
+;        [:div {:class "dropdown-item CTA d-flex"}
+;         [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
+;         [:a {:href "#checkout-address", :class "btn btn-template wide"} "Checkout"]]]]]]]])
 
 (def hero-items
   [:section {:class "hero hero-home no-padding"}
@@ -861,15 +820,15 @@
          [:a {:href "#", :class "visit-product active btn-template-outlined wide"}
           [:i {:class "icon-search"}]"View\n                    Add to wishlist"]]]]]]]])
 
-(def header
-  [:header {:class "header"} navbar menu])
+;(def header
+;  [:header {:class "header"} navbar menu])
 
 (defn header' [app]
   [:header {:class "header"} [navbar' app] [menu' app]]
   )
 
-(defn category-item-row[app product]
-  (let [{:keys [:thumbnail :id :parent :name :price :description]} product]
+(defn category-item-row[product]
+  (let [{:keys [:thumbnail :ref :parent :name :price :description]} product]
 
     (println "Rendering: " product)
 
@@ -883,25 +842,23 @@
         [:div {:class "CTA d-flex align-items-center justify-content-center"}
          ;[:a {:href (str "#/product-details/" id), :class "add-to-cart"}
          ; [:i {:class "fa fa-shopping-cart"}]]
-         [:a {:href (str "#/product-details/" id), :class "visit-product active"}
+         [:a {:href (str "#/product-details/" ref), :class "visit-product active"}
           [:i {:class "icon-search"}]"View"]
          ;[:a {:href "#", :data-toggle "modal", :data-target "#exampleModal", :class "quick-view"}
          ; [:i {:class "fa fa-arrows-alt"}]]
          ]]]
       [:div {:class "title"}
        ;[:small {:class "text-muted"} "Men Wear"] ;show category name here?
-       [:a {:href (str "#/product-details/" id)}
+       [:a {:href (str "#/product-details/" ref)}
         [:h3 {:class "h6 text-uppercase no-margin-bottom"} name]]
        [:span {:class "price text-muted"} (currency price)]]]]
 
     ))
 
-(defn product-list [app]
+(defn product-list []
 
-  (println "components :: product-list")
-
-  (let [category-id (get-in @app [:args :category-id])
-        products (ds/find-products-by-supercategory category-id)
+  (let [category-id (:category-id @(subscribe [:ecom/current-page-args]))  ;(get-in @app [:args :category-id])
+        products @(subscribe [:ecom/products-by-supercategory category-id]) ;(ds/find-products-by-supercategory category-id)
         ]
 
     (println (str "view category id : " category-id " and with products count: " (count products)))
@@ -1009,9 +966,9 @@
        [:div {:class "row"}  ;"<!-- item-->"
 
         ;category-row
-        (let [make-product (partial category-item-row app)]
-          (map make-product products)
-          )
+        ;(let [make-product (partial category-item-row app)]
+          (map category-item-row products)
+        ;  )
 
         ]
 
@@ -1039,40 +996,21 @@
   )
 
 (defn section-header[app title breadcrumb]
+  (let [cart-item-count @(subscribe [:ecom/cart-items-count])
+        cart-item-total @(subscribe [:ecom/cart-total])
+        ]
   [:section {:class "hero hero-page gray-bg padding-small"}
    [:div {:class "container"}
     [:div {:class "row d-flex"}
      [:div {:class "col-lg-9 order-2 order-lg-1"}
       [:h1 title]
-      [:p {:class "lead text-muted"} (str "You currently have " (reduce + (map :quantity (vals (:cart @app)))) " items in your shopping cart")]
-      [:p {:class "lead text-muted"} (str "Cart total " (currency (calc-cart-item-total app)) )]
+      [:p {:class "lead text-muted"} (str "You currently have " cart-item-count " items in your shopping cart")]
+      [:p {:class "lead text-muted"} (str "Cart total " (currency cart-item-total) )]
       ]
      [:ul {:class "breadcrumb d-flex justify-content-start justify-content-lg-center col-lg-3 text-right order-1 order-lg-2"}
       [:li {:class "breadcrumb-item"}
        [:a {:href "index.html"} "Home"]]
-      [:li {:class "breadcrumb-item active"} breadcrumb]]]]])
-
-(defn quotes[val]
-  (str "\"" val "\"") )
-
-(defn inc-quantity [key app]
-  (let [qty (get-in @app [:cart key]) item (get-in @app [:cart key] )]
-    (swap! app update-in [:cart key :quantity] inc)
-    )
-  )
-
-(defn delete-cart-item [key app]
-  (swap! app update-in [:cart] dissoc key)
-  )
-
-(defn dec-quantity [key app]
-  (let [qty (get-in @app [:cart key :quantity]) item (get-in @app [:cart key]  )]
-    (if (<= qty 1)
-      (delete-cart-item key app)
-      (swap! app update-in [:cart key :quantity] dec)
-      )
-    )
-  )
+      [:li {:class "breadcrumb-item active"} breadcrumb]]]]]))
 
 (defn cart-row[app cart-item]
   (let [{:keys [:thumbnail :parent :name :price :quantity :key :description]} cart-item]
@@ -1093,13 +1031,13 @@
       [:div {:class "col-2"}
        [:div {:class "d-flex align-items-center"}
         [:div {:class "quantity d-flex align-items-center"}
-         [:div {:class "dec-btn" :on-click #(dec-quantity key app)} "-"]
+         [:div {:class "dec-btn" :on-click #(dispatch [:ecom/change-quantity key dec])} "-"]
          [:input {:type "text", :value quantity, :class "quantity-no"}]
-         [:div {:class "inc-btn" :on-click #(inc-quantity key app)} "+"]]]]
+         [:div {:class "inc-btn" :on-click #(dispatch [:ecom/change-quantity key inc])} "+"]]]]
       [:div {:class "col-2"}
        [:span (currency (* price quantity))]]
       [:div {:class "col-1 text-center"}
-       [:i {:class "delete fa fa-trash" :on-click #(delete-cart-item key app)}]]]]
+       [:i {:class "delete fa fa-trash" :on-click #(dispatch [:ecom/remove-cart-item key])}]]]]
     )
   )
 
@@ -1110,7 +1048,8 @@
   ;(let [items (map cart-row cart)]
   ;  (.log js/console (str "cart rows:\n " (with-out-str (pp/pprint items )) ))
   ;  (.log js/console (str "cart rows as ved:\n " (with-out-str (pp/pprint (vec items) )) ))
-  (let [make-row (partial cart-row app)]
+  (let [make-row (partial cart-row app)
+        cart-items @(subscribe [:ecom/cart-items])]
     [:div
      [:section {:class "shopping-cart"}
 
@@ -1125,7 +1064,7 @@
            [:div {:class "col-2"} "Total"]
            [:div {:class "col-1 text-center"} "Remove"]]]
          [:div {:class "basket-body"}
-          (map make-row (vals (:cart @app)))
+          (map make-row cart-items)
           ]]]]
       [:div {:class "container"}
        [:div {:class "CTAs d-flex align-items-center justify-content-center justify-content-md-end flex-column flex-md-row"}
@@ -1137,7 +1076,9 @@
 ;)
 
 (defn order-summary [app]
-  (let [item-total (calc-cart-item-total app) shipping (:shipping @app)]
+  (let [shipping @(subscribe [:ecom/shipping-cost])
+        item-total @(subscribe [:ecom/cart-subtotal])
+        ]
     [:div {:class "col-lg-4"}
      [:div {:class "block-body order-summary"}
       [:h6 {:class "text-uppercase"} "Order Summary"]
@@ -1157,23 +1098,38 @@
         [:strong {:class "text-primary price-total"} (currency (+ item-total shipping))]]]]])
   )
 
-(defn set-value! [id value app doc]
+(defn set-value! [id value doc]
   ;(swap! state assoc :saved? false)
-  (swap! app assoc-in [doc id] value))
-
-(defn get-value [id app doc]
-  (get-in @app [doc id]))
-
-(defn text-input [id label name placeholder classes app doc]
-  [:div {:class (str "form-group " classes)}
-   [:label {:for id :class "form-label"} label]
-   [:input {:id id :type "text" :name name :placeholder placeholder :class "form-control"
-            :value (get-value id app doc) :on-change #(set-value! id (-> % .-target .-value) app doc) }]]
+  ;(swap! app assoc-in [doc id] value)
+  (dispatch [:ecom/set-form-value doc id value])
   )
 
+;(defn get-value [id app doc]
+;  (get-in @app [doc id]))
+
+(defn text-input [id label name placeholder classes doc]
+  (let [field-val @(subscribe [:ecom/forms doc id])]
+    [:div {:class (str "form-group " classes)}
+     [:label {:for id :class "form-label"} label]
+     [:input {:id    id :type "text" :name name :placeholder placeholder :class "form-control"
+              :value field-val :on-change #(set-value! id (-> % .-target .-value)  doc)}]]
+    )
+  )
+
+;(defn text-input [id label name placeholder classes app doc]
+;  (let [field-val @(subsribe [:ecom/forms doc id])]
+;    [:div {:class (str "form-group " classes)}
+;     [:label {:for id :class "form-label"} label]
+;     [:input {:id    id :type "text" :name name :placeholder placeholder :class "form-control"
+;              :value (get-value id app doc) :on-change #(set-value! id (-> % .-target .-value) app doc)}]]
+;    )
+;  )
+
 (defn copy-address[app]
-  (swap! app assoc-in [:address] (:saved-address @app)
-  ))
+  ;(swap! app assoc-in [:address] (:saved-address @app)
+  ;)
+
+  )
 
 (defn delivery-method [app method]
   (swap! app assoc :delivery method)
@@ -1200,9 +1156,9 @@
         [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
          [:a {:href "#cart", :class "btn btn-template-outlined prev"}
           [:i {:class "fa fa-angle-left"}] "Back to Cart"]
-         [:a {:href "#checkout-address", :class "btn btn-template " :on-click #(delivery-method app :HD)}
+         [:a {:href "#checkout-address", :class "btn btn-template " :on-click #(dispatch [:ecom/delivery-method :HD])}
           [:i {:class "fa"}] "Home Delivery"]
-         [:a {:href "#checkout-store" :class "btn btn-template " :on-click #(store-cart app)} "Click and Collect"
+         [:a {:href "#checkout-store" :class "btn btn-template " :on-click #(dispatch [:ecom/delivery-method :CC])} "Click and Collect"
           [:i {:class "fa"}]]]
         ]]]
      [order-summary app]
@@ -1270,7 +1226,12 @@
 (defn store-did-mount [this]
   (println "Store did mount!!")
   ;TODO check for presence of widget and change store vs reinit widget on every component render
-  (.initstore js/window (aget js/window "skus"))
+  (let [cart-items @(subscribe [:ecom/cart-items])
+        sku-qty (vec (map (fn[item] {"sku" (:ref item) "quantity" (:quantity item)}) cart-items))
+        ]
+    (net/log (str "skus: " sku-qty))
+    (.initstore js/window (clj->js sku-qty)) ;(aget js/window "skus")
+    )
   )
 
 (defn store [app]
@@ -1300,9 +1261,9 @@
     )
   )
 
-(defn cart-availability-row[app cart-item]
+(defn cart-availability-row[ cart-item]
   (let [{:keys [:thumbnail :price :quantity :key :name :description :sku]} cart-item
-        replacement (:replacement @app)]
+        replacement @(subscribe [:ecom/replacement-sku])]
     ^{:key (str "cri-" key)}
     [:div {:class "item row d-flex align-items-center"}
      [:div {:class "col-6"}
@@ -1319,18 +1280,18 @@
      [:div {:class "col-2"}
       [:span (currency (* price quantity))]]
      (when (= sku "SKU001")
-       [:div {:class "col-6" :style {:paddingLeft "70px"}}[:div {:style {:backgroundColor "#b57983"} :on-click #(delete-cart-item key app)} [:span "Out of Stock - click to remove"]]
+       [:div {:class "col-6" :style {:paddingLeft "70px"}}[:div {:style {:backgroundColor "#b57983"} :on-click #(dispatch [:ecom/remove-cart-item key])} [:span "Out of Stock - click to remove"]]
        ]
        )
      (when (= sku "SKU703")
-       [:div {:class "col-6" :style {:paddingLeft "70px"} :on-click #(substitute-item app key replacement)} [:img {:src (:thumbnail replacement), :alt "..."}]
+       [:div {:class "col-6" :style {:paddingLeft "70px"} :on-click #(dispatch [:ecom/substitute-item key replacement])} [:img {:src (:thumbnail replacement), :alt "..."}]
        [:div { :style {:backgroundColor "#ccbd88"}}
         [:span (str "Item unavailable - click to substitute with: " (:description replacement) "@ " (currency (:price replacement)))]
         ]]
        )
      (when (or (= sku "SKU001") (= sku "SKU703"))
        [:div {:class "delete"}
-        [:i {:class "fa fa-trash-o" :on-click #(delete-cart-item key app)}]]
+        [:i {:class "fa fa-trash-o" :on-click #(dispatch [:ecom/remove-cart-item key])}]]
        )
      ]
     ))
@@ -1382,21 +1343,23 @@
     )
   )
 
+;TODO EVENTS
 (defn add-to-cart[product-id app quantity]
   (let [
         product (ds/find-product-by-id product-id) ;(first (filter #(= product-id (:id %)) (:catalog @app)))
         parent (ds/find-parent-product product-id) ; (first (filter #(= (:parent product) (:id %)) (:catalog @app)))
         cart (get :cart @app {})
-        key-val ((:next-key-fn @app))
-        cart-keys {:quantity quantity :key key-val}
+        ;key-val ((:next-key-fn @app))
+        ;cart-keys {:quantity quantity :key key-val}
         ]
     (println (str "add-to-cart:: adding " product-id " to cart"))
     (let [cart-item (if parent
-                      (merge parent product cart-keys)
-                      (merge product cart-keys)
-                      )]
+                      parent
+                      product)
+                      ]
       (println (str "cart item: " cart-item))
-      (swap! app assoc-in [:cart key-val] cart-item)
+      (dispatch [:ecom/add-to-cart cart-item quantity])
+      ;(swap! app assoc-in [:cart key-val] cart-item)
       )
     )
   )
@@ -1416,16 +1379,19 @@
 
 (defn product-detail [app]
 
-  (let [product-id (get-in @app [:args :product-id])
-        base-product (ds/find-product-by-id product-id)   ;(first (filter #(= product-id (:id %)) (:catalog @app)))
-        is-variant? (:base base-product)
-        valid-variants (get-in @app [:selected-variant product-id])
-        variant (merge base-product (first valid-variants))
+  (let [
+        product-ref (:product-ref @(subscribe [:ecom/current-page-args]))
+        base-product @(subscribe [:ecom/products-by-ref product-ref]) ; (ds/find-product-by-id product-id)
+        is-variant? false                                   ;(:base base-product)
         variant-selector-id (:variant-selector base-product)
-        variant-selector (get (:variant-selector @app) variant-selector-id)
+        variant-selectors @(subscribe [:ecom/variant-selectors])
+        variant-selector (get variant-selectors variant-selector-id)
+        valid-variants (get-in @app [:selected-variant product-ref])
+        ;variant (merge base-product (first valid-variants))
+        variant base-product
         ]
 
-    (println (str "Pid " product-id " product " base-product " variant-selector "
+    (println (str "Pid " product-ref " product " base-product " variant-selector "
                   variant-selector " id -> " variant-selector-id))
     (println (str "Variant? " is-variant? " valid count: " (count valid-variants)))
 
@@ -1436,10 +1402,10 @@
         [:div {:class "product-images col-lg-6"}
          ;[:div {:class "ribbon-info text-uppercase"} "Fresh"]
          ;[:div {:class "ribbon-primary text-uppercase"} "Sale"] ; "Sale" if < price orig
-        ; [:div {:data-slider-id "1", :class "owl-carousel items-slider owl-drag"}
+         ; [:div {:data-slider-id "1", :class "owl-carousel items-slider owl-drag"}
          [:div {:class "owl-carousel" :style {:display "block" :paddingLeft "50px"}}
 
-         [:div {:class "item"}
+          [:div {:class "item"}
            [:img {:src (:image variant), :alt "shirt"}]]
           ;[:div {:class "item"}
           ; [:img {:src "img/shirt-black.png", :alt "shirt"}]]
@@ -1464,7 +1430,7 @@
          [:div {:class "d-flex align-items-center justify-content-between flex-column flex-sm-row"}
           [:ul {:class "price list-inline no-margin"}
            [:li {:class "list-inline-item current"} (currency (:price variant))]
-           [:li {:class "list-inline-item original"} (when (and (:original variant) (< (:price variant) (:original variant) )) (currency (:original variant)))]]
+           [:li {:class "list-inline-item original"} (when (and (:original variant) (< (:price variant) (:original variant))) (currency (:original variant)))]]
           [:div {:class "review d-flex align-items-center"}
            [:ul {:class "rate list-inline"}
             [:li {:class "list-inline-item"}
@@ -1483,22 +1449,23 @@
          [:div {:class "d-flex align-items-center justify-content-center justify-content-lg-start"}
           [quantity-selector "pdp-qty-select"]
 
-
           (when variant-selector
             [:div
-             (make-selects product-id variant-selector-id variant-selector app)
+             ;TODO was product-id... check this
+             (make-selects product-ref variant-selector-id variant-selector app)
              ]
-          )
-]
+            )
+          ]
          [:ul {:class "CTAs list-inline"}
           [:li {:class "list-inline-item"}
-           [:a {:href "#", :class (if (and is-variant? (not= (count valid-variants) 1)) "btn btn-template wide disabled" "btn btn-template wide")
-                :on-click (fn[e]
+           [:a {:href     "#", :class (if (and is-variant? (not= (count valid-variants) 1)) "btn btn-template wide disabled" "btn btn-template wide")
+                :on-click (fn [e]
                             (. e preventDefault)
-                            (println (str "Adding -> " (if is-variant? (:id (first valid-variants)) product-id)))
-                            (add-to-cart (if is-variant? (:id (first valid-variants)) product-id) app (int-input-value "pdp-qty-select"))
+                            (println (str "Adding -> " (if is-variant? (:ref (first valid-variants)) product-ref)))
+                            (dispatch [:ecom/add-to-cart base-product (int-input-value "pdp-qty-select")])
+                            ;(add-to-cart (if is-variant? (:ref (first valid-variants)) product-ref) app (int-input-value "pdp-qty-select"))
                             )}
-            [:i {:class "icon-cart"}] "Add to Cart" ]]
+            [:i {:class "icon-cart"}] "Add to Cart"]]
           [:li {:class "list-inline-item"}
            [:a {:href "#", :class "btn btn-template-outlined wide"}
             [:i {:class "fa fa-heart-o"}] "Add to wishlist"]]]]]]]
@@ -1621,17 +1588,19 @@
      ]
     )
   )
+
 (defn availability [app]
 
   ;{StoreId: "DR003", Line1: "Demo Store Melbourne", Line2: "300 Collingwood street", City: "MELBOURNE", County: "VIC", …}
 
 ;{StoreId DR004, Line1 Demo Store Sydney, Line2 200 Pitt Street, City SYDNEY, County NSW, Postcode 2000}
   (net/log "Availability::rendering component")
-  (let [make-row (partial cart-availability-row app)
-        selected-store (js->clj (aget js/window "storeAddress" ))]
+  (let [
+        selected-store (js->clj (aget js/window "storeAddress" ))
+        cart-total @(subscribe [:ecom/cart-total])
+        cart-items @(subscribe [:ecom/cart-items])
+        ]
     (println selected-store)
-    ;(println cart-items)
-    ;[ { :skuRef "thesku" :requestedQuantity xx } ]
 
     [:div
     [:div {:style {:paddingLeft "40px"} :class " row"}
@@ -1670,11 +1639,11 @@
               [:div {:class "col-2"} "Quantity"]
               [:div {:class "col-2"} "Unit Price"]]]
             [:div {:class "basket-body"}
-             (map make-row (vals (:cart @app)))
+             (map cart-availability-row cart-items)
              ]]
            [:div {:class "total row"}
             [:span {:class "col-md-10 col-2"} "Total"]
-            [:span {:class "col-md-2 col-10 text-primary"} (currency (calc-cart-item-total app))]]]
+            [:span {:class "col-md-2 col-10 text-primary"} (currency cart-total)]]]
           [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
            [:a {:href "#checkout-store", :class "btn btn-template-outlined wide prev"}
             [:i {:class "fa fa-angle-left"}]"Back to Choose Store"]
@@ -1701,7 +1670,7 @@
       [:div {:class "tab-content"}
 
        [:div {:class "CTAss"}
-       [:a {:href "#checkout-address", :class "btn btn-template-outlined wide prev" :on-click #(copy-address app)}
+       [:a {:href "#checkout-address", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/update-delivery-address (:saved-address @app)])}
         [:i {:class "fa"}] "Use Saved Address"]
        ]
 
@@ -1709,15 +1678,15 @@
 
         [:form {:action "#"}
          [:div {:class "row"}
-          [text-input "firstname" "First Name" "first-name" "Enter your first name" "col-md-6" app :address]
-          [text-input "lastname" "Last Name" "last-name" "Enter your last name" "col-md-6" app :address]
-          [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" app :address]
-          [text-input "street" "Street" "street" "Enter your street address" "col-md-6" app :address]
-          [text-input "city" "City" "city" "Your city" "col-md-3" app :address]
-          [text-input "state" "State" "state" "Your state" "col-md-3" app :address]
-          [text-input "zip" "Postal Code" "zip" "Your Postal Code" "col-md-3" app :address]
-          [text-input "country" "Country" "country" "Your country" "col-md-3" app :address]
-          [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" app :address]
+          [text-input "firstname" "First Name" "first-name" "Enter your first name" "col-md-6" :address]
+          [text-input "lastname" "Last Name" "last-name" "Enter your last name" "col-md-6" :address]
+          [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" :address]
+          [text-input "street" "Street" "street" "Enter your street address" "col-md-6" :address]
+          [text-input "city" "City" "city" "Your city" "col-md-3" :address]
+          [text-input "state" "State" "state" "Your state" "col-md-3" :address]
+          [text-input "zip" "Postal Code" "zip" "Your Postal Code" "col-md-3" :address]
+          [text-input "country" "Country" "country" "Your country" "col-md-3" :address]
+          [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :address]
           ]]
 
         [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
@@ -1728,12 +1697,8 @@
      [order-summary app]
      ]]])
 
-(defn update-shipping [method amount app]
-  (swap! app assoc :shipping amount)
-  (swap! app assoc :shipping-method method)
-  )
-
 (defn shipping[app]
+
   [:section {:class "checkout"}
    [:div {:class "container"}
     [:div {:class "row"}
@@ -1752,17 +1717,18 @@
         [:form {:action "#", :class "shipping-form"}
          [:div {:class "row"}
           [:div {:class "form-group col-md-6"}
-           [:input {:type "radio", :name "shippping", :id "option1", :class "radio-template" :on-click #(update-shipping :EXPRESS 15 app)}]
+           [:input {:type "radio", :name "shippping", :id "option1", :class "radio-template" :on-click #(dispatch [:ecom/update-shipping :express-shipping])}]
            [:label {:for "option1"}
             [:strong "Next Day Shipping"]
             [:br]
             [:span {:class "label-description"} "Fastest Option"]]]
           [:div {:class "form-group col-md-6"}
-           [:input {:type "radio", :name "shippping", :id "option2", :class "radio-template" :on-click #(update-shipping :STANDARD 5 app)}]
+           [:input {:type "radio", :name "shippping", :id "option2", :class "radio-template" :on-click #(dispatch [:ecom/update-shipping :standard-shipping])}]
            [:label {:for "option2"}
             [:strong "Standard Shipping"]
             [:br]
-            [:span {:class "label-description"} "Two business days"]]]
+            [:span {:class "label-description"} "Two business days"]]
+           ]
           ;[:div {:class "form-group col-md-6"}
           ; [:input {:type "radio", :name "shippping", :id "option3", :class "radio-template"}]
           ; [:label {:for "option3"}
@@ -1785,110 +1751,17 @@
 
      ]]])
 
-(def place-order-chan (chan))
-
-(defn place-order-event-loop [app-state]
-  (go-loop []
-           (when-let [response (<! place-order-chan)]
-             (net/log "received data on place-order channel")
-             (net/log response)
-             (if (= (:status response) 200)
-               (do
-                 (swap! app-state assoc :order-id (:body response))
-                 (swap! app-state assoc :cart {})
-                 (swap! app-state assoc :order-error nil)
-                 )
-               (swap! app-state merge @app-state {:order-error (format-error response)})
-               )
-             (recur)
-             )
-           )
-  )
-
-(defn build-customer [first-name last-name mobile email]
-  {"firstName" first-name "lastName" last-name "mobile" mobile "email" email}
-  )
-
-(defn build-cc-customer [payment]
-  (let [pmt-field (partial get payment)
-        name (pmt-field "card-name")
-        name-parts (clojure.string/split name " ")
-        first-name (first name-parts)
-        last-name (last name-parts)
-        phone (pmt-field  "phone-number")
-        email (pmt-field "email")]
-
-    (build-customer first-name last-name phone email)
-    )
-  )
-
-(defn build-hd-customer [address]
-  (let [field-list ["firstname" "lastname" "phone-number" "email"]]
-    (apply build-customer (map (partial get address) field-list))
-    ))
-
-(defn build-shipping-address [address]
-  (let [adr-field (partial get address)]
-    {
-     "name"     (str (adr-field "first-name") " " (adr-field "last-name"))
-     "street"   (adr-field "street")
-     "city"     (adr-field "city")
-     "state"    (adr-field "state")
-     "postcode" (adr-field "zip")
-     "country"  (adr-field "country")
-     }
-    )
-  )
 
 
-(defn make-order [app]
-  (let [payment (:payment @app)
-        address (:address @app)
-        delivery (:delivery @app)
-        ship-cost (:shipping @app)
-        ship-method (:shipping-method @app)
-        customer (if (= delivery :CC) (build-cc-customer payment) (build-hd-customer address))
-        selected-store (get (js->clj (aget js/window "storeAddress")) "StoreId") ;"HB001" ;
-        items (vec (map (fn [item] {"skuRef" (:sku item) "skuPrice" (:price item) "requestedQty" (:quantity item) "totalPrice" (* (:price item) (:quantity item))}) (vals (:cart @app))))]
-
-    (merge {
-            "customer"   customer
-            "items"      items
-            "orderRef"   (str (rand-int 1000000))
-            "retailerId" 1}
-           (if (= delivery :CC)
-             {"fulfilmentChoice"
-                     {"address" {"locationRef" selected-store}}
-              "type" delivery
-              }
-             {; HD option...
-              "fulfilmentChoice" {"deliveryType"        ship-method
-                                  "fulfilmentPrice"     ship-cost
-                                  "deliveryInstruction" "home delivery"
-                                  "address"             (build-shipping-address address)}
-              "type"             delivery
-              }
-             )
-           )
-    )
-  )
-
-(defn place-order [app]
-  (let [order (make-order app)]
-    (println (with-out-str (pp/pprint order)))
-    (swap! app assoc :order-id nil)
-    (swap! app assoc :order-error nil)
-    (net/place-order order place-order-chan)
-    )
-  )
-
-(defn copy-payment[app]
-  (swap! app assoc-in [:payment] (:saved-payment @app)
-         false
-         ))
+;(defn copy-payment[app]
+;  (swap! app assoc-in [:payment] (:saved-payment @app)
+;         false
+;         ))
 
 (defn payment[app]
-  (let [hd (= (:delivery @app) :HD) cc (= (:delivery @app) :CC)]
+  ;TODO subscribe to delivery...
+  (let [delivery @(subscribe [:ecom/delivery-type])
+        hd (= delivery :HD) cc (= delivery :CC)]
     [:section {:class "checkout"}
      [:div {:class "container"}
       [:div {:class "row"}
@@ -1927,22 +1800,22 @@
              [:div {:class "card-body"}
 
               [:div {:class "CTAss"}
-               [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev" :on-click #(copy-payment app)}
+               [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/update-payment (:saved-payment @app)])}
                 [:i {:class "fa"}] "Use Saved Payment"]
                ]
 
               [:form {:action "#" :autocomplete "false"}
                [:div {:class "row"}
-                [text-input "card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" app :payment]
-                [text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" app :payment]
-                [text-input "expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" app :payment]
-                [text-input "card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" app :payment]
-                [text-input "card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" app :payment]
+                [text-input "card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" :payment]
+                [text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" :payment]
+                [text-input "expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" :payment]
+                [text-input "card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" :payment]
+                [text-input "card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" :payment]
                 (when cc
-                  [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" app :payment]
+                  [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :payment]
                   )
                 (when cc
-                  [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" app :payment]
+                  [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" :payment]
                   )
                 ]]]]]
            [:div {:class "card"}
@@ -1982,7 +1855,7 @@
              [:a {:href "#checkout-availability", :class "btn btn-template-outlined wide prev"}
               [:i {:class "fa fa-angle-left"}] "Back to Check Availability"])
            (when cc
-             [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(place-order app)} "Place Order"
+             [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(dispatch [:ecom/place-order])} "Place Order"
               [:i {:class "fa fa-angle-right"}]]
              )
            ]]]]
@@ -1991,7 +1864,7 @@
     )
   )
 
-(defn cart-review-row[app cart-item]
+(defn cart-review-row[cart-item]
   (let [{:keys [:thumbnail :price :quantity :key :description :sku]} cart-item]
     ^{:key (str "cri-" key)}
     [:div {:class "item row d-flex align-items-center"}
@@ -2000,7 +1873,7 @@
        [:img {:src thumbnail, :alt "...", :class "img-fluid"}]
        [:div {:class "title"}
         [:a {:href "detail.html"}
-         [:h6 description]
+         [:h6 {:dangerouslySetInnerHTML {:__html description}}]
          [:span {:class "text-muted"} (str "SKU: " sku)]]]]]
      [:div {:class "col-2"}
       [:span (currency price)]]
@@ -2011,7 +1884,10 @@
     ))
 
 (defn cart-review [app]
-  (let [make-row (partial cart-review-row app)]
+  (let [;make-row (partial cart-review-row app)
+        cart-items @(subscribe [:ecom/cart-items])
+        cart-total @(subscribe [:ecom/cart-total])
+        ]
   [:section {:class "checkout"}
    [:div {:class "container"}
     [:div {:class "row"}
@@ -2036,34 +1912,37 @@
             [:div {:class "col-2"} "Quantity"]
             [:div {:class "col-2"} "Unit Price"]]]
           [:div {:class "basket-body"}
-           (map make-row (vals (:cart @app)))
+           (map cart-review-row cart-items)
            ]]
          [:div {:class "total row"}
           [:span {:class "col-md-10 col-2"} "Total"]
-          [:span {:class "col-md-2 col-10 text-primary"} (currency (calc-cart-item-total app))]]]
+          [:span {:class "col-md-2 col-10 text-primary"} (currency cart-total)]]]
         [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
          [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev"}
           [:i {:class "fa fa-angle-left"}]"Back to payment method"]
-         [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(place-order app)} "Place Order"
+         [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(dispatch [:ecom/place-order])} "Place Order"
           [:i {:class "fa fa-angle-right"}]]]]]]
      [order-summary app]
      ]]]))
 
 (defn order-confirmation[app]
-  [:section {:class "padding-small"}
-   [:div {:class "container"}
-    [:div {:class "row about-item"}
-     [:div {:class "col-lg-8 col-sm-9"}
+  (let [order-id @(subscribe [:ecom/last-order-id])
+        order-error @(subscribe [:ecom/order-error])]
+    [:section {:class "padding-small"}
+     [:div {:class "container"}
+      [:div {:class "row about-item"}
+       [:div {:class "col-lg-8 col-sm-9"}
 
-      (if (:order-error @app)
-        [:h2 "There was a problem processing your order"[:p {:style {"color" "#b21129"}} (:order-error @app)]]
-        (if (:order-id @app)
-          [:h2 "Your order has been placed successfully"]
-          [:h2 "Your order is processing"]
+        (if order-error
+          [:h2 "There was a problem processing your order" [:p {:style {"color" "#b21129"}} order-error]]
+          (if order-id
+            [:h2 "Your order has been placed successfully"]
+            [:h2 "Your order is processing"]
+            )
           )
-        )
-     ]
-     [:div {:class "col-lg-4 col-sm-3 d-none d-sm-flex align-items-center"}
-      [:div {:class "about-icon ml-lg-0"}
-       [:img (when (nil? (:order-id @app)) {:src "img/loading_128.GIF"})]]]]]]
+        ]
+       [:div {:class "col-lg-4 col-sm-3 d-none d-sm-flex align-items-center"}
+        [:div {:class "about-icon ml-lg-0"}
+         [:img (when (nil? order-id) {:src "img/loading_128.GIF"})]]]]]]
+    )
   )
