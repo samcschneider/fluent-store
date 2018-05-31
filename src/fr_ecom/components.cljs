@@ -60,7 +60,7 @@
   [:a {:href "#", :class "dropdown-item" :on-click (fn[e] (do (. e preventDefault)(net/log (str "Processing..." (:id site))) (dispatch [:ecom/load-site-config (:id site)])))} (:name site)]
   )
 
-(defn navbar' [app]
+(defn navbar' []
   (let [sites @(subscribe [:ecom/sites])
         site-abbrev @(subscribe [:ecom/active-site-abbreviation])]
     (net/log (str "Sites subscription: [" sites "]"))
@@ -131,11 +131,11 @@
 
     ))
 
-(defn menu' [app]
+(defn menu' []
 
   (let [cart-item-count @(subscribe [:ecom/cart-items-count])
         cart-total @(subscribe [:ecom/cart-subtotal])
-        top-level-categories @(subscribe [:ecom/top-level-categories])
+        top-level-categories (doall @(subscribe [:ecom/top-level-categories]))
         all-categories @(subscribe [:ecom/categories])
         ]
     [:nav {:class "navbar navbar-expand-lg"}
@@ -295,7 +295,7 @@
 
            [:ul {:aria-labelledby "navbarDropdownMenuLink", :class "dropdown-menu"}
 
-            (for [child (concat @(subscribe [:ecom/category-by-parent (:ref category)])
+            (for [child (concat (vec @(subscribe [:ecom/category-by-parent (:ref category)]))
                                 [{:id (:id category) :name (str "Shop all " (:name category))}])]
               ^{:key (str (gensym "cn-"))}
               [:li
@@ -823,8 +823,8 @@
 ;(def header
 ;  [:header {:class "header"} navbar menu])
 
-(defn header' [app]
-  [:header {:class "header"} [navbar' app] [menu' app]]
+(defn header' []
+  [:header {:class "header"} [navbar'] [menu']]
   )
 
 (defn category-item-row[product]
@@ -995,7 +995,7 @@
     )
   )
 
-(defn section-header[app title breadcrumb]
+(defn section-header[title breadcrumb]
   (let [cart-item-count @(subscribe [:ecom/cart-items-count])
         cart-item-total @(subscribe [:ecom/cart-total])
         ]
@@ -1012,7 +1012,7 @@
        [:a {:href "index.html"} "Home"]]
       [:li {:class "breadcrumb-item active"} breadcrumb]]]]]))
 
-(defn cart-row[app cart-item]
+(defn cart-row[cart-item]
   (let [{:keys [:thumbnail :parent :name :price :quantity :key :description]} cart-item]
     (.log js/console (str "tn: " thumbnail "cost: " (currency price) "qty: " quantity))
     ^{:key (str "ci-" key)}
@@ -1041,15 +1041,9 @@
     )
   )
 
-(defn cart-contents [app]
+(defn cart-contents []
 
-  ;(.log js/console (str "Cart value in cart-contents:\n " (with-out-str (pp/pprint cart )) ))
-  ;
-  ;(let [items (map cart-row cart)]
-  ;  (.log js/console (str "cart rows:\n " (with-out-str (pp/pprint items )) ))
-  ;  (.log js/console (str "cart rows as ved:\n " (with-out-str (pp/pprint (vec items) )) ))
-  (let [make-row (partial cart-row app)
-        cart-items @(subscribe [:ecom/cart-items])]
+  (let [cart-items @(subscribe [:ecom/cart-items])]
     [:div
      [:section {:class "shopping-cart"}
 
@@ -1064,7 +1058,7 @@
            [:div {:class "col-2"} "Total"]
            [:div {:class "col-1 text-center"} "Remove"]]]
          [:div {:class "basket-body"}
-          (map make-row cart-items)
+          (map cart-row cart-items)
           ]]]]
       [:div {:class "container"}
        [:div {:class "CTAs d-flex align-items-center justify-content-center justify-content-md-end flex-column flex-md-row"}
@@ -1075,7 +1069,7 @@
     )
 ;)
 
-(defn order-summary [app]
+(defn order-summary []
   (let [shipping @(subscribe [:ecom/shipping-cost])
         item-total @(subscribe [:ecom/cart-subtotal])
         ]
@@ -1099,13 +1093,8 @@
   )
 
 (defn set-value! [id value doc]
-  ;(swap! state assoc :saved? false)
-  ;(swap! app assoc-in [doc id] value)
   (dispatch [:ecom/set-form-value doc id value])
   )
-
-;(defn get-value [id app doc]
-;  (get-in @app [doc id]))
 
 (defn text-input [id label name placeholder classes doc]
   (let [field-val @(subscribe [:ecom/forms doc id])]
@@ -1116,34 +1105,7 @@
     )
   )
 
-;(defn text-input [id label name placeholder classes app doc]
-;  (let [field-val @(subsribe [:ecom/forms doc id])]
-;    [:div {:class (str "form-group " classes)}
-;     [:label {:for id :class "form-label"} label]
-;     [:input {:id    id :type "text" :name name :placeholder placeholder :class "form-control"
-;              :value (get-value id app doc) :on-change #(set-value! id (-> % .-target .-value) app doc)}]]
-;    )
-;  )
-
-(defn copy-address[app]
-  ;(swap! app assoc-in [:address] (:saved-address @app)
-  ;)
-
-  )
-
-(defn delivery-method [app method]
-  (swap! app assoc :delivery method)
-  (when (= method :CC)
-    (swap! app assoc :shipping 0.00))
-  )
-
-(defn store-cart [app]
-  (aset js/window "skus"
-        (clj->js (vec (map (fn[item] {"sku" (:sku item) "quantity" (:quantity item)}) (vals (:cart @app))))))
-  (delivery-method app :CC)
-  )
-
-(defn delivery [app]
+(defn delivery []
 
   [:section {:class "checkout"}
    [:div {:class "container"}
@@ -1161,59 +1123,28 @@
          [:a {:href "#checkout-store" :class "btn btn-template " :on-click #(dispatch [:ecom/delivery-method :CC])} "Click and Collect"
           [:i {:class "fa"}]]]
         ]]]
-     [order-summary app]
+     [order-summary]
      ]]]
 
   )
-
-(def fulfillment-options-chan (chan))
 
 (defn format-error [response]
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
   )
 
-(defn fulfilment-options-event-loop [app-state]
-  (go-loop []
-           (when-let [response (<! fulfillment-options-chan)]
 
-             (if (= (:status response) 200)
-               (do
 
-                 (swap! app-state assoc-in [:fulfillment-options] (:body response))
-                 (swap! app-state assoc-in [:fo-spinner] false)
 
-                 )
-               (swap! app-state merge @app-state {:fulfillment-options (format-error response)})
-               )
-             (recur)
-             )
-           )
-  )
 
-(defn check-fulfillment[app]
-  (let [cart-items (vec (map (fn[item] {:skuRef (:sku item) :requestedQuantity (:quantity item)}) (vals (:cart @app))))
-        selected-store (js->clj (aget js/window "storeAddress" ))]
-
-    (net/log "check-fulfillment::Getting fulfillment options")
-    (swap! app assoc :fo-spinner true)
-    (net/get-fulfillment-options (get selected-store "StoreId") cart-items 1 fulfillment-options-chan)
-    (net/log "check-fulfillment:: fininshed FO call")
-    )
-  )
-
-(defn store-render [app]
+(defn store-render []
       [:div {:class "container"}
                [:div {:class "CTAs d-flex  flex-column flex-lg-row"}
                 [:a {:href "#checkout-delivery", :class "btn btn-template-outlined prev"}
                  [:i {:class "fa fa-angle-left"}] "Back to Delivery"]
                 [:span {:style {"padding-left" "50px"}}]
-                [:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(check-fulfillment app)} "Check Availability"
+                [:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(dispatch [:ecom/check-fulfillment])} "Check Availability"
                  [:i {:class "fa"}]]
-                ;[:span {:style {"padding-left" "50px"}}]
-                ;[:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(check-fulfillment app)} "Reserve Items"
-                ; [:i {:class "fa"}]]
                 ]
-
         [:div {:class "col-lg-8"}
           [:div {:id "store"}
            ]
@@ -1230,12 +1161,12 @@
         sku-qty (vec (map (fn[item] {"sku" (:ref item) "quantity" (:quantity item)}) cart-items))
         ]
     (net/log (str "skus: " sku-qty))
-    (.initstore js/window (clj->js sku-qty)) ;(aget js/window "skus")
+    (.initstore js/window (clj->js sku-qty))
     )
   )
 
-(defn store [app]
-  (reagent/create-class {:reagent-render      #(store-render app)
+(defn store []
+  (reagent/create-class {:reagent-render      #(store-render)
                          :component-did-mount store-did-mount}))
 
 ;TODO Consider this with-meta approach to hooking into react lifecycle events
@@ -1262,7 +1193,7 @@
   )
 
 (defn cart-availability-row[ cart-item]
-  (let [{:keys [:thumbnail :price :quantity :key :name :description :sku]} cart-item
+  (let [{:keys [:thumbnail :price :quantity :key :name :description :ref]} cart-item
         replacement @(subscribe [:ecom/replacement-sku])]
     ^{:key (str "cri-" key)}
     [:div {:class "item row d-flex align-items-center"}
@@ -1272,24 +1203,24 @@
        [:div {:class "title"}
         [:a {:href "#"} ;show item details...
          [:h6 name]
-         [:span {:class "text-muted"} (str "Sku: " sku)]]]]]
+         [:span {:class "text-muted"} (str "Sku: " ref)]]]]]
      [:div {:class "col-2"}
       [:span (currency price)]]
      [:div {:class "col-2"}
       [:span quantity]]
      [:div {:class "col-2"}
       [:span (currency (* price quantity))]]
-     (when (= sku "SKU001")
+     (when (= ref "SKU001")
        [:div {:class "col-6" :style {:paddingLeft "70px"}}[:div {:style {:backgroundColor "#b57983"} :on-click #(dispatch [:ecom/remove-cart-item key])} [:span "Out of Stock - click to remove"]]
        ]
        )
-     (when (= sku "SKU703")
+     (when (= ref "SKU703")
        [:div {:class "col-6" :style {:paddingLeft "70px"} :on-click #(dispatch [:ecom/substitute-item key replacement])} [:img {:src (:thumbnail replacement), :alt "..."}]
        [:div { :style {:backgroundColor "#ccbd88"}}
         [:span (str "Item unavailable - click to substitute with: " (:description replacement) "@ " (currency (:price replacement)))]
         ]]
        )
-     (when (or (= sku "SKU001") (= sku "SKU703"))
+     (when (or (= ref "SKU001") (= ref "SKU703"))
        [:div {:class "delete"}
         [:i {:class "fa fa-trash-o" :on-click #(dispatch [:ecom/remove-cart-item key])}]]
        )
@@ -1387,7 +1318,7 @@
         variant-selectors @(subscribe [:ecom/variant-selectors])
         variant-selector (get variant-selectors variant-selector-id)
         valid-variants (get-in @app [:selected-variant product-ref])
-        ;variant (merge base-product (first valid-variants))
+        ;TODO fix variants... -> variant (merge base-product (first valid-variants))
         variant base-product
         ]
 
@@ -1589,7 +1520,7 @@
     )
   )
 
-(defn availability [app]
+(defn availability []
 
   ;{StoreId: "DR003", Line1: "Demo Store Melbourne", Line2: "300 Collingwood street", City: "MELBOURNE", County: "VIC", …}
 
@@ -1606,17 +1537,11 @@
     [:div {:style {:paddingLeft "40px"} :class " row"}
      [:span {:class "col-md-6"}
       [:h6 {:class "text-uppercase"} "Pickup Location"] [:span {:class "total"} (str (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))] ]]
-     ;[:h6 {:class "text-uppercase"} "Address"][:p (str (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))]]
     [:section {:class "checkout"}
-     (when (:spinner-fo @app)
-       [:div [:img {:src "img/loading_128.GIF"}]]
-       )
-     [:div ]
-     ;[:div {:class " row"}
-     ; [:span {:class "col-md-10 col-2"}
-     ;  [:p (str "Selected Store: " (get selected-store "StoreId")) ]
-     ;  [:p (str " Address: " (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))]]]
-     ;[:div [:p (str "Selected Store: " (get selected-store "StoreId") " Address: " (get selected-store "Line1" ) " -- " (get selected-store "Line2" ))]]
+     ;TODO add this back into the FO call with a subscription?
+     ;(when (:spinner-fo @app)
+     ;  [:div [:img {:src "img/loading_128.GIF"}]]
+     ;  )
      [:div {:class "container"}
       [:div {:class "row"}
        [:div {:class "col-lg-8"}
@@ -1639,7 +1564,7 @@
               [:div {:class "col-2"} "Quantity"]
               [:div {:class "col-2"} "Unit Price"]]]
             [:div {:class "basket-body"}
-             (map cart-availability-row cart-items)
+             (doall (map cart-availability-row cart-items))
              ]]
            [:div {:class "total row"}
             [:span {:class "col-md-10 col-2"} "Total"]
@@ -1649,10 +1574,10 @@
             [:i {:class "fa fa-angle-left"}]"Back to Choose Store"]
            [:a {:href "#checkout-payment", :class "btn btn-template wide next"} "Payment Method"
             [:i {:class "fa fa-angle-right"}]]]]]]
-       [order-summary app]
+       [order-summary]
        ]]]]))
 
-(defn checkout [app]
+(defn checkout []
 
   [:section {:class "checkout"}
    [:div {:class "container"}
@@ -1670,7 +1595,7 @@
       [:div {:class "tab-content"}
 
        [:div {:class "CTAss"}
-       [:a {:href "#checkout-address", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/update-delivery-address (:saved-address @app)])}
+       [:a {:href "#checkout-address", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/use-saved-delivery-address])}
         [:i {:class "fa"}] "Use Saved Address"]
        ]
 
@@ -1694,10 +1619,10 @@
           [:i {:class "fa fa-angle-left"}] "Delivery Option"]
          [:a {:href "#checkout-shipping", :class "btn btn-template wide next"} "Choose shipping method"
           [:i {:class "fa fa-angle-right"}]]]]]]
-     [order-summary app]
+     [order-summary]
      ]]])
 
-(defn shipping[app]
+(defn shipping[]
 
   [:section {:class "checkout"}
    [:div {:class "container"}
@@ -1729,37 +1654,17 @@
             [:br]
             [:span {:class "label-description"} "Two business days"]]
            ]
-          ;[:div {:class "form-group col-md-6"}
-          ; [:input {:type "radio", :name "shippping", :id "option3", :class "radio-template"}]
-          ; [:label {:for "option3"}
-          ;  [:strong "Usps next day"]
-          ;  [:br]
-          ;  [:span {:class "label-description"} "Get it right on next day - fastest option possible."]]]
-          ;[:div {:class "form-group col-md-6"}
-          ; [:input {:type "radio", :name "shippping", :id "option4", :class "radio-template"}]
-          ; [:label {:for "option4"}
-          ;  [:strong "Usps next day"]
-          ;  [:br]
-          ;  [:span {:class "label-description"} "Get it right on next day - fastest option possible."]]]
           ]]
         [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
          [:a {:href "#checkout-address", :class "btn btn-template-outlined wide prev"}
           [:i {:class "fa fa-angle-left"}]"Back to Address"]
          [:a {:href "#checkout-payment", :class "btn btn-template wide next"} "Choose payment method"
           [:i {:class "fa fa-angle-right"}]]]]]]
-     [order-summary app]
+     [order-summary]
 
      ]]])
 
-
-
-;(defn copy-payment[app]
-;  (swap! app assoc-in [:payment] (:saved-payment @app)
-;         false
-;         ))
-
-(defn payment[app]
-  ;TODO subscribe to delivery...
+(defn payment[]
   (let [delivery @(subscribe [:ecom/delivery-type])
         hd (= delivery :HD) cc (= delivery :CC)]
     [:section {:class "checkout"}
@@ -1800,11 +1705,11 @@
              [:div {:class "card-body"}
 
               [:div {:class "CTAss"}
-               [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/update-payment (:saved-payment @app)])}
+               [:a {:href "#checkout-payment", :class "btn btn-template-outlined wide prev" :on-click #(dispatch [:ecom/use-saved-payment])}
                 [:i {:class "fa"}] "Use Saved Payment"]
                ]
 
-              [:form {:action "#" :autocomplete "false"}
+              [:form {:action "#" :autoComplete "false"}
                [:div {:class "row"}
                 [text-input "card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" :payment]
                 [text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" :payment]
@@ -1859,13 +1764,13 @@
               [:i {:class "fa fa-angle-right"}]]
              )
            ]]]]
-       [order-summary app]
+       [order-summary]
        ]]]
     )
   )
 
 (defn cart-review-row[cart-item]
-  (let [{:keys [:thumbnail :price :quantity :key :description :sku]} cart-item]
+  (let [{:keys [:thumbnail :price :quantity :key :description :ref]} cart-item]
     ^{:key (str "cri-" key)}
     [:div {:class "item row d-flex align-items-center"}
      [:div {:class "col-6"}
@@ -1874,7 +1779,7 @@
        [:div {:class "title"}
         [:a {:href "detail.html"}
          [:h6 {:dangerouslySetInnerHTML {:__html description}}]
-         [:span {:class "text-muted"} (str "SKU: " sku)]]]]]
+         [:span {:class "text-muted"} (str "SKU: " ref)]]]]]
      [:div {:class "col-2"}
       [:span (currency price)]]
      [:div {:class "col-2"}
@@ -1883,11 +1788,9 @@
       [:span (currency (* price quantity))]]]
     ))
 
-(defn cart-review [app]
-  (let [;make-row (partial cart-review-row app)
-        cart-items @(subscribe [:ecom/cart-items])
-        cart-total @(subscribe [:ecom/cart-total])
-        ]
+(defn cart-review []
+  (let [cart-items @(subscribe [:ecom/cart-items])
+        cart-total @(subscribe [:ecom/cart-total])]
   [:section {:class "checkout"}
    [:div {:class "container"}
     [:div {:class "row"}
@@ -1922,10 +1825,10 @@
           [:i {:class "fa fa-angle-left"}]"Back to payment method"]
          [:a {:href "#checkout-placeorder", :class "btn btn-template wide next" :on-click #(dispatch [:ecom/place-order])} "Place Order"
           [:i {:class "fa fa-angle-right"}]]]]]]
-     [order-summary app]
+     [order-summary]
      ]]]))
 
-(defn order-confirmation[app]
+(defn order-confirmation[]
   (let [order-id @(subscribe [:ecom/last-order-id])
         order-error @(subscribe [:ecom/order-error])]
     [:section {:class "padding-small"}
