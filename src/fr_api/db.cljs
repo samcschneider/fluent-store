@@ -18,9 +18,11 @@
                    :price 249})
 (def default-db
 
-  {:cart-items (assoc (sorted-map) 3 cart-item)
+  {:cart-items (sorted-map)
    :sites      []
    :variant-selectors ds/variant-selectors
+   :saved-address ds/saved-address ;TODO move to config so it varies by site
+   :saved-payment ds/saved-payment ;TODO move to config so it varies by site
    :config {:name "Local" :categories @ds/categories :products @ds/catalog}
    }
   )
