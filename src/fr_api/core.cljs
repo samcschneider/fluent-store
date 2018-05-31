@@ -20,32 +20,17 @@
 
 (enable-console-print!)
 
-(println "This text is printed from src/fr-api/core.cljs. Go ahead and edit it and see reloading in action.")
-
-(declare next-cart-key!)
 
 (defonce app-state (reagent/atom
                      {:orders {}
-                      :categories ds/categories
-                      :variant-selector ds/variant-selectors
                       :cart-add 2
                       :cart {}
                       :shipping 0.00
                       :replacement ds/replacement
                       :address {}
-                      :saved-address ds/saved-address
                       :payment {}
-                      :saved-payment ds/saved-payment
                       :config {}
-                      :next-key-fn #(next-cart-key!)
                       }))
-
-(defn next-cart-key![]
-  (let [key (+ 1 (get @app-state :cart-add 0))]
-    (swap! app-state assoc :cart-add key)
-    key
-    )
-  )
 
 (def orders-chan (chan))
 
@@ -200,22 +185,22 @@
 (defmulti current-page #(:id @(subscribe [:ecom/current-page])))
 
 (defmethod current-page :home []
-  [v/home app-state])
+  [v/home])
 
 (defmethod current-page :categories []
-  [v/categories app-state])
+  [v/categories])
 
 (defmethod current-page :hello []
   [v/hello])
 
 (defmethod current-page :cart []
-  [v/cart app-state])
+  [v/cart])
 
 (defmethod current-page :product.details []
   [v/product-details app-state])
 
 (defmethod current-page :checkout.delivery []
-  [v/delivery app-state])
+  [v/delivery])
 
 (defmethod current-page :checkout.store []
   [v/store app-state])
@@ -246,9 +231,7 @@
   [v/order-confirmation app-state])
 
 (defn setup-ui []
-
   (orders-event-loop)
-  (comp/fulfilment-options-event-loop app-state)
   (app-routes)
   current-page
   )
@@ -264,6 +247,7 @@
   (ev/new-sites-event-loop :ecom/sites-received :ecom/sites-error)
   (ev/config-event-loop :ecom/config-received :ecom/config-error)
   (ev/place-order-event-loop)
+  (ev/fulfilment-options-event-loop)
   (re-frame/dispatch-sync [:ecom/load-sites])
   ;(dev-setup)
   (mount-root))
