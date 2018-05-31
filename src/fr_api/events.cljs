@@ -172,6 +172,24 @@
 
 (rf/reg-event-db
 
+  :ecom/use-saved-delivery-address
+
+  (fn [db [_ value]]
+    (assoc-in db [:forms :address] (:saved-address db))
+    )
+  )
+
+(rf/reg-event-db
+
+  :ecom/use-saved-payment
+
+  (fn [db [_ value]]
+    (assoc-in db [:forms :payment] (:saved-payment db))
+    )
+  )
+
+(rf/reg-event-db
+
   :ecom/update-payment
 
   (fn [db [_ value]]
@@ -387,3 +405,55 @@
 ;    (swap! app assoc-in [:cart key] updated)
 ;    )
 ;  )
+
+(rf/reg-event-db
+  :ecom/fulfillment-options
+
+  (fn [db [_ options]]
+    (assoc db :fulfillment-options options)
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/fulfillment-options-error
+
+  (fn [db [_ error]]
+    (-> db
+        (assoc :fulfillment-options {})
+        (assoc :fulfillment-options-error error)
+        )
+    )
+  )
+
+(def fulfillment-options-chan (chan))
+
+(defn fulfilment-options-event-loop []
+  (go-loop []
+           (when-let [response (<! fulfillment-options-chan)]
+
+             (if (= (:status response) 200)
+               (do
+                 (rf/dispatch [:ecom/fulfillment-options (:body response)])
+                 )
+               (rf/dispatch [:ecom/fulfillment-options-error (:body response)])
+               )
+             (recur)
+             )
+           )
+  )
+
+(rf/reg-event-fx
+
+  :ecom/check-fulfillment
+  ;TODO add coeffect to read store from js/window
+
+  (fn [cofx [_]]
+    (let [cart-items (vec (map (fn [item] {:skuRef (:ref item) :requestedQuantity (:quantity item)}) @(rf/subscribe [:ecom/cart-items])))
+          selected-store (js->clj (aget js/window "storeAddress"))]
+      (net/log (str "Checking fulfillment"))
+      ;TODO get retailer id from config... maybe a subscription for active retailer?
+      (net/get-fulfillment-options (get selected-store "StoreId") cart-items 1 fulfillment-options-chan)
+      )
+    {}
+    )
+  )

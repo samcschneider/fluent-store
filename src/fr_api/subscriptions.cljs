@@ -159,7 +159,7 @@
 
   (fn [db [e parent]]
     (let [categories (vals (get-in db [:config :categories]))]
-      (filter #(= (:parent %) parent) categories)
+      (vec (filter #(= (:parent %) parent) categories))
     )
     )
   )

@@ -8,10 +8,21 @@
     )
   )
 
-(def default-env {:client-id     "xxx"
-                  :client-secret "yyy"
-                  :username "zzz"
-                  :password "aaa"})
+(def default-env {:client-id     "DEMONA"
+                  :client-secret "3e364537-2fc0-4af2-851e-29f77d842723"
+                  :username "demoretailer_admin"
+                  :password "2M0SNS"})
+
+;"retailerId": "119",
+;"apiKey": "N2W5H6",
+;"username": "sterling_admin",
+;"password": "Q7H73U",
+
+;(def default-env {:client-id     "DEMO"
+;                  :client-secret "bfbf3efe-f689-47d8-b172-0c5258d1c6a6"
+;                  :username "sterling_admin"
+;                  :password "Q7H73U"
+;                  :retailer-id "119"})
 
 (def env (atom default-env))
 
@@ -131,3 +142,14 @@
 ;fetch locations using default params (grab first 50 ACTIVE locations only)
 (defn get-all-locations [chan]
   (fr-get location-endpoint {} location-get-params chan))
+
+(def api-base "https://sandbox.api.fluentretail.com/api/v4.1/")
+
+;https://sandbox.api.fluentretail.com/api/v4.1/report/fulfilment?retailerId=1&serviceType=ALL&from=2018-03-16T00:00:00.000Z&to=2018-04-16T23:59:59.000Z
+;https://sandbox.api.fluentretail.com/api/v4.1/fulfilment?serviceType=%3AALL&from=2018-03-16T00%3A00%3A00.000Z&to=2018-04-16T23%3A59%3A59.000Z
+(def report-base (str api-base "report/"))
+(def fulfillment-report-endpoint (str report-base "fulfilment"))
+
+(defn fufillment-report[params chan]
+  (fr-get fulfillment-report-endpoint {} params chan)
+  )
