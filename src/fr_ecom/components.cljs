@@ -5,6 +5,7 @@
     [clojure.string :as string]
     [goog.string :as gstring]
     [goog.string.format]
+    [goog.date.DateTime]
     [reagent.format :as fmt]
     [clojure.string]
     [reagent.core :as reagent]
@@ -13,6 +14,8 @@
     [fr-api.subscriptions :as subscriptions]
     [cljs.core.async :refer [<! put! chan]]
     [re-frame.core :refer [subscribe dispatch]]
+    [cljs-time.coerce]
+    [cljs-time.format :as tf]
     )
   )
 
@@ -94,12 +97,12 @@
 
           ]]]]]])
   )
-;(count (:cart @app-state))
-;        [:a {:href "#", :class "dropdown-item" :on-click #(fn [e] ((.preventDefault e) (change-site "s14839")))} "Groceries"]]]]]]])
 
-;(defn calc-cart-item-total[app]
-;  (reduce + (map (fn[item] (* (:price item) (:quantity item))) (vals (:cart @app))))
-;  )
+(defn date[val]
+  (let [date-val (cljs-time.coerce/from-string val)]
+    (tf/unparse (tf/formatters :date) date-val)
+    )
+  )
 
 (defn currency[val]
   (fmt/currency-format val)
@@ -135,7 +138,7 @@
 
   (let [cart-item-count @(subscribe [:ecom/cart-items-count])
         cart-total @(subscribe [:ecom/cart-subtotal])
-        top-level-categories (doall @(subscribe [:ecom/top-level-categories]))
+        top-level-categories @(subscribe [:ecom/top-level-categories])
         all-categories @(subscribe [:ecom/categories])
         ]
     [:nav {:class "navbar navbar-expand-lg"}
@@ -380,7 +383,7 @@
           [:li {:class "dropdown-item"}
            [:a {:href "#"} "Profile       "]]
           [:li {:class "dropdown-item"}
-           [:a {:href "#"} "Orders       "]]
+           [:a {:href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider"}])} "Orders       "]]
           [:li {:class "dropdown-divider"} "     "]
           [:li {:class "dropdown-item"}
            [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
@@ -785,7 +788,7 @@
        [:img {:src "img/brand-4.svg", :alt "...", :class "img-fluid"}]]]]]])
 
 (def example-modal
-  [:div {:id "exampleModal", :tabindex "-1", :role "dialog", :aria-hidden "true", :class "modal fade overview"}
+  [:div {:id "exampleModal", :tabIndex "-1", :role "dialog", :aria-hidden "true", :class "modal fade overview"}
    [:div {:role "document", :class "modal-dialog"}
     [:div {:class "modal-content"}
      [:button {:type "button", :data-dismiss "modal", :aria-label "Close", :class "close"}
@@ -995,7 +998,193 @@
     )
   )
 
-(defn section-header[title breadcrumb]
+
+
+(defn order-row[row-item]
+  (let [{:keys [:type :orderId :createdOn :totalPaidPrice :status]} row-item]
+    ^{:key (str "odr-" orderId)}
+    [:tr
+     [:th orderId]
+     [:td (date createdOn)]
+     [:td (currency totalPaidPrice)]
+     [:td
+      [:span {:class "badge badge-info"} status]]
+     [:td
+      [:a {:href (str "#/order-details/" orderId), :class "btn btn-primary btn-sm"
+           :on-click #(dispatch [:ecom/view-order-details orderId])} "View"]]]
+    )
+  )
+
+(defn order-list[]
+  (let [orders @(subscribe [:ecom/order-history])]
+    [:div {:class "col-lg-8 col-xl-9 pl-lg-3"}
+     [:table {:class "table table-hover table-responsive-md"}
+      [:thead
+
+       [:tr
+        [:th "Order"]
+        [:th "Date"]
+        [:th "Total"]
+        [:th "Status"]
+        [:th "Action"]]]
+      [:tbody
+       (map order-row orders)
+       ]]
+     (let [paging @(subscribe [:ecom/order-paging])]
+
+        [:div {:class "container"}
+         [:div {:class "row"}
+
+                 [:div {:class "col-sm text-center"}
+                  (when (:has-prev paging)
+                    [:a {:class "fa fa-angle-double-left" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider" :start (:prev-page paging)}])} "  Previous"]
+                    )
+                  ]
+                  [:div {:class "col-sm text-center"}
+                   [:p (str "Viewing page: " (:current-page paging) " of " (:total-pages paging))]
+                   ]
+                 [:div {:class "col-sm text-center"}
+                  (when (:has-next paging)
+                    [:a {:class "fa" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider" :start (:next-page paging)}])} "Next  " [:span {:class "fa fa-angle-double-right"}]]
+                    )
+                  ]
+
+          ]
+        ]
+       )
+
+     ]
+    )
+  )
+
+
+(defn order-item-row [item]
+  (let [{:keys [:imageUrlRef :skuPrice :requestedQty :skuRef]} item
+        qty-int (js/parseInt requestedQty)
+        price-float (js/parseFloat skuPrice)
+        product @(subscribe [:ecom/products-by-ref skuRef])
+        ]
+    ^{:key (str "odt-" (gensym))}
+    [:div {:class "item"}
+     [:div {:class "row d-flex align-items-center"}
+      [:div {:class "col-6"}
+       [:div {:class "d-flex align-items-center"}
+        [:img {:src imageUrlRef, :alt "...", :class "img-fluid"}]
+        [:div {:class "title"}
+         [:a {:href "detail.html"}
+          [:h6 (if (:description product) {:dangerouslySetInnerHTML {:__html (:description product)}} "Description unavailable" )]
+          [:span {:class "text-muted"} (str "SKU: " skuRef)]]]]]
+      [:div {:class "col-2"}
+       [:span (currency skuPrice)]]
+      [:div {:class "col-2"} requestedQty]
+      [:div {:class "col-2 text-right"}
+       [:span (currency (* price-float qty-int))]]]]
+    )
+  )
+
+(defn order-details[]
+  (println "Order details component...")
+  (let [order-id (:order-id @(subscribe [:ecom/current-page-args]))
+        order-details @(subscribe [:ecom/order-details])
+        order-items (:items order-details)
+        fulfillment-address (get-in order-details [:fulfilmentChoice :address])
+        order-subtotal @(subscribe [:ecom/order-subtotal])
+        hd? (= "HD" (:type order-details))
+        cc? (= "CC" (:type order-details))
+        shipping-cost (get-in order-details [:fulfilmentChoice :fulfilmentPrice])
+        ]
+
+    [:div {:class "container"}
+    [:div  {:class "row" :style {"paddingTop" "15px"}}
+  [:div {:class "col-lg-8"}
+
+   [:div {:class "basket basket-customer-order"}
+    [:div {:class "basket-holder"}
+     [:div {:class "basket-header"}
+      [:div {:class "row"}
+       [:div {:class "col-6"} "Product"]
+       [:div {:class "col-2"} "Price"]
+       [:div {:class "col-2"} "Quantity"]
+       [:div {:class "col-2 text-right"} "Total"]]]
+     [:div {:class "basket-body"}
+
+      (map order-item-row order-items)
+
+      ]
+
+     ]]
+
+
+   ]
+     [:div {:class "col-lg-4"}
+      [:div {:class "item"}
+       [:div {:class "row"}
+        [:div {:class "offset-md-6 col-4"}
+         [:strong "Order subtotal"]]
+        [:div {:class "col-2 text-right"}
+         [:strong (currency order-subtotal)]]]]
+      [:div {:class "item"}
+       [:div {:class "row"}
+        [:div {:class "offset-md-6 col-4"}
+         [:strong "Shipping and handling"]]
+        [:div {:class "col-2 text-right"}
+         [:strong (currency shipping-cost)]]]]
+      [:div {:class "item"}
+       [:div {:class "row"}
+        [:div {:class "offset-md-6 col-4"}
+         [:strong "Tax"]]
+        [:div {:class "col-2 text-right"}
+         [:strong "$0.00"]]]]
+      [:div {:class "item"}
+       [:div {:class "row"}
+        [:div {:class "offset-md-6 col-4"}
+         [:strong "Total"]]
+        [:div {:class "col-2 text-right"}
+         [:strong (currency (+ order-subtotal shipping-cost))]]]]
+      ]
+     ]
+     [:div {:class "row addresses" :style {"paddingTop" "15px"}}
+      [:div {:class "col-sm-6"}
+       [:div {:class "block-header"}
+        [:h6 {:class "text-uppercase"} (if hd? "Shipping address" "Store Pickup Address")]]
+       [:div {:class "block-body"}
+        [:p (when cc? (:companyName fulfillment-address)) (when hd? (:name fulfillment-address) )
+         [:br](:street fulfillment-address)
+         [:br](:city fulfillment-address)
+         [:br](:state fulfillment-address)
+         [:br](:postcode fulfillment-address)
+         [:br](:country fulfillment-address)]
+        ]
+       ]
+
+      ]
+     ]
+    )
+  )
+
+(defn details-header []
+  (let [order-details @(subscribe [:ecom/order-details])]
+    (println (str "Order details header data: " order-details))
+      [:section {:class "hero hero-page gray-bg padding-small"}
+       [:div {:class "container"}
+        [:div {:class "row d-flex"}
+         [:div {:class "col-lg-9 order-2 order-lg-1"}
+          [:h1 "Order Details"]
+          (when order-details
+            [:p {:class "lead"} (str "Order Number: " (:orderId order-details) " Order Date: " (date (:createdOn order-details)))]
+            )
+          [:p {:class "lead"} (str "Order Status: " (or (:status order-details) "loading..."))]
+          ]
+         [:ul {:class "breadcrumb d-flex justify-content-start justify-content-lg-center col-lg-3 text-right order-1 order-lg-2"}
+          [:li {:class "breadcrumb-item"}
+           [:a {:href "index.html"} "Home"]]
+          [:li {:class "breadcrumb-item active"} "Orders / Order Details"]]]]]
+
+      )
+    )
+
+
+(defn section-header[title breadcrumb & [alternate]]
   (let [cart-item-count @(subscribe [:ecom/cart-items-count])
         cart-item-total @(subscribe [:ecom/cart-total])
         ]
@@ -1004,8 +1193,12 @@
     [:div {:class "row d-flex"}
      [:div {:class "col-lg-9 order-2 order-lg-1"}
       [:h1 title]
-      [:p {:class "lead text-muted"} (str "You currently have " cart-item-count " items in your shopping cart")]
-      [:p {:class "lead text-muted"} (str "Cart total " (currency cart-item-total) )]
+      (if alternate
+        [:p {:class "lead text-muted"} alternate]
+          [:span [:p {:class "lead text-muted"} (str "You currently have " cart-item-count " items in your shopping cart")]
+          [:p {:class "lead text-muted"} (str "Cart total " (currency cart-item-total) )]]
+        )
+
       ]
      [:ul {:class "breadcrumb d-flex justify-content-start justify-content-lg-center col-lg-3 text-right order-1 order-lg-2"}
       [:li {:class "breadcrumb-item"}
@@ -1141,7 +1334,7 @@
                [:div {:class "CTAs d-flex  flex-column flex-lg-row"}
                 [:a {:href "#checkout-delivery", :class "btn btn-template-outlined prev"}
                  [:i {:class "fa fa-angle-left"}] "Back to Delivery"]
-                [:span {:style {"padding-left" "50px"}}]
+                [:span {:style {"paddingLeft" "50px"}}]
                 [:a {:href "#checkout-availability", :class "btn btn-template " :on-click #(dispatch [:ecom/check-fulfillment])} "Check Availability"
                  [:i {:class "fa"}]]
                 ]

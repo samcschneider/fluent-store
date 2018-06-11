@@ -275,6 +275,97 @@
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
   )
 
+(def orders-chan (chan))
+
+(defn get-orders[]
+  (net/log "Getting orders...")
+  (net/get-orders "sam" "schneider" orders-chan)
+  )
+
+(rf/reg-event-fx
+  :ecom/load-orders
+  ;expecting args: first-name, last-name, count, start
+  (fn [cofx [_ args]]
+    ;TOOD grab customer context and inject parameters instead of event parms?
+    ;TODO return an http/API effect instead of calling API directly and returning empty coeffects
+    (net/get-orders args orders-chan)
+    {}
+    )
+  )
+
+(defn orders-event-loop [success failure]
+  (go-loop []
+           (when-let [response (<! orders-chan)]
+             (net/log "received data on orders channel")
+             (net/log response)
+             (if (= (:status response) 200)
+               (rf/dispatch [success (:body response)])
+               (rf/dispatch [failure (:body response)])
+               )
+             (recur)
+             )
+           )
+  )
+
+(rf/reg-event-db
+  :ecom/orders-error
+
+  (fn [db [_ error]]
+    (assoc db :order-history-error error)
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/orders-received
+
+  (fn [db [_ orders]]
+    (assoc db :order-history orders)
+    )
+  )
+
+(def order-details-chan (chan))
+
+(rf/reg-event-fx
+  :ecom/view-order-details
+  (fn [cofx [_ order-id]]
+    ;TOOD grab customer context and inject parameters instead of event parms?
+    ;TODO return an http/API effect instead of calling API directly and returning empty coeffects
+    (net/get-order-details order-id order-details-chan)
+    {}
+    )
+  )
+
+(defn order-details-event-loop [success failure]
+  (go-loop []
+           (when-let [response (<! order-details-chan)]
+             (net/log "received data on order-details channel")
+             (net/log response)
+             (if (= (:status response) 200)
+               (rf/dispatch [success (:body response)])
+               (rf/dispatch [failure (:body response)])
+               )
+             (recur)
+             )
+           )
+  )
+
+(rf/reg-event-db
+  :ecom/order-details-error
+
+  (fn [db [_ error]]
+    (assoc db :order-details-error error)
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/order-details-received
+
+  (fn [db [_ order-details]]
+    (println "Received order details")
+    (assoc db :order-details order-details)
+    )
+  )
+
 (defn new-sites-event-loop
   "Pass in the effect to trigger with the data received on the channel"
   [success failure]
@@ -312,7 +403,7 @@
   )
 
 (defn build-customer [first-name last-name mobile email]
-  {"firstName" first-name "lastName" last-name "mobile" mobile "email" email}
+  {"firstName" first-name "lastName" last-name "mobile" mobile "email" email "customerRef" "10605"}
   )
 
 (defn build-cc-customer [payment]

@@ -32,31 +32,12 @@
                       :config {}
                       }))
 
-(def orders-chan (chan))
-
-(defn get-orders[]
-  (net/log "Getting orders...")
-  (net/get-orders orders-chan)
-  )
-
 ;TODO move to common utils along with log
 (defn format-error [response]
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
   )
 
-(defn orders-event-loop []
-  (go-loop []
-           (when-let [response (<! orders-chan)]
-             (net/log "received data on orders channel")
-             (net/log response)
-             (if (= (:status response) 200)
-               (swap! app-state merge @app-state {:orders (:body response)})
-               (swap! app-state merge @app-state {:orders (format-error response)})
-               )
-             (recur)
-             )
-           )
-  )
+
 
 (def locations-chan (chan))
 
@@ -113,12 +94,6 @@
    [:h1 [:p @state]]
    [:div
     [:button {:on-click #(net/renew-token)} "Get Token"]]])
-
-(defn get-orders-ui [state]
-  [:div
-   [:h1 "Orders response: " [:textarea {:value (with-out-str (pp/pprint (:orders @state))) :cols 120 :rows 15}]]
-   [:div
-    [:button {:on-click #(get-orders)} "Get Orders"]]])
 
 (defn hook-browser-navigation! []
   (doto (History.)
@@ -180,6 +155,14 @@
             (dispatch [:ecom/navigate :product.details {:product-ref product-ref}])
             )
 
+  (defroute "/order-history" []
+           (dispatch [:ecom/navigate :order-history])
+           )
+
+  (defroute "/order-details/:order-id" [order-id]
+            (dispatch [:ecom/navigate :order-details {:order-id order-id}])
+            )
+
   (hook-browser-navigation!))
 
 (defmulti current-page #(:id @(subscribe [:ecom/current-page])))
@@ -230,8 +213,14 @@
 (defmethod current-page :checkout.placeorder []
   [v/order-confirmation app-state])
 
+(defmethod current-page :order-history []
+  [v/orders])
+
+(defmethod current-page :order-details []
+  [v/order-details])
+
 (defn setup-ui []
-  (orders-event-loop)
+  ;(orders-event-loop)
   (app-routes)
   current-page
   )
@@ -248,6 +237,8 @@
   (ev/config-event-loop :ecom/config-received :ecom/config-error)
   (ev/place-order-event-loop)
   (ev/fulfilment-options-event-loop)
+  (ev/orders-event-loop :ecom/orders-received :ecom/orders-error)
+  (ev/order-details-event-loop :ecom/order-details-received :ecom/order-details-error)
   (re-frame/dispatch-sync [:ecom/load-sites])
   ;(dev-setup)
   (mount-root))

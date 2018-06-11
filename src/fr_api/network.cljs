@@ -124,8 +124,14 @@
 
 (def fulfillment-options-endpoint "https://sandbox.api.fluentretail.com/api/v4.1/fulfilmentOptions")
 
-(defn get-orders [chan]
-  (fr-get order-endpoint {} chan)
+(defn get-orders [args chan]
+  (let [defaults {:start 1 :count 10}]
+    (fr-get order-endpoint {} (merge defaults args) chan)
+    )
+  )
+
+(defn get-order-details [order-id chan]
+  (fr-get (str order-endpoint "/" order-id) {} chan)
   )
 
 (defn place-order [order chan]

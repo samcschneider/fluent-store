@@ -16,6 +16,14 @@
   [:div [c/header'] [c/product-list] c/example-modal]
   )
 
+(defn orders[]
+  [:div [c/header'] [c/section-header "Order History" "Orders" "Your most recent orders"] [c/order-list]]
+  )
+
+(defn order-details[]
+  (println "Viewing order-details")
+  [:div [c/header'] [c/details-header] [c/order-details]])
+
 (defn hello[]
   [:div [:p "hello"] c/hero-items]
   )

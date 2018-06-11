@@ -109,6 +109,35 @@
 
 (re/reg-sub
 
+  :ecom/order-history
+
+  (fn [db]
+    (get-in db [:order-history :results])
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/order-details
+
+  (fn [db]
+    (:order-details db)
+    )
+  )
+
+(re/reg-sub
+  :ecom/order-subtotal
+
+  (fn [db]
+    (let [order (:order-details db)
+          items (:items order)]
+      (reduce + (map (fn [item] (* (:requestedQty item) (:skuPrice item))) items))
+      )
+    )
+  )
+
+(re/reg-sub
+
   :ecom/sites
 
   (fn [db]
@@ -180,7 +209,42 @@
 
   (fn [db [_ product-ref]]
     (let [all-products (vals (get-in db [:config :products]))]
-      (first (filter #(= (:ref %) product-ref) all-products))
+      (if all-products
+        (let [product (first (filter #(= (:ref %) product-ref) all-products))]
+          (if (nil? product)
+            {}
+            product
+            )
+          )
+        {}
+        )
+      )
+    )
+  )
+
+(re/reg-sub
+  :ecom/order-paging
+
+  (fn [db]
+    (let [order-history (:order-history db)]
+      (if order-history
+        ;todo destructure
+        (let [start (:start order-history)
+              count (:count order-history)
+              total (:total order-history)
+              ]
+          {:has-next (< (+ start count) total)
+           :has-prev (> start count)
+           :current-page (+ 1 (quot start count))
+           :total total
+           :total-pages (+ 1 (quot total count))
+           :next-page (+ start count)
+           :prev-page (- start count)}
+          )
+
+        {:has-next false :has-pref false :total 0 :current-page 0}
+
+        )
       )
     )
   )
