@@ -16,7 +16,8 @@
 		 [re-frame "0.10.5"]
                  [com.andrewmcveigh/cljs-time "0.5.0"]
 ;;from re-frame template                 [org.clojure/core.async "0.2.391"]
-                 [re-com "2.1.0"]]
+                 [re-com "2.1.0"]
+                 [com.andrewmcveigh/cljs-time "0.5.2"]]
 
   :plugins [[lein-figwheel "0.5.13"]
             [lein-cljsbuild "1.1.7" :exclusions [[org.clojure/clojure]]]]
