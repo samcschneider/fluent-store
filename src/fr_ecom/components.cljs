@@ -1350,14 +1350,45 @@
         ]
      )
 
+;TODO move to utils...
+(defn- strip-colon [val]
+  (if (clojure.string/starts-with? val ":")
+    (clojure.string/replace-first val ":" "")
+    val
+    )
+  )
+
+(defn- symbol-key-to-string-key[source-map]
+  (reduce-kv (fn [m k v]
+               (assoc m (if (or (symbol? k) (clojure.string/starts-with? (str k) ":")) (strip-colon (str k)) k) v)
+               ) {} source-map)
+  )
+
+
 (defn store-did-mount [this]
   (println "Store did mount!!")
   ;TODO check for presence of widget and change store vs reinit widget on every component render
   (let [cart-items @(subscribe [:ecom/cart-items])
         sku-qty (vec (map (fn[item] {"sku" (:ref item) "quantity" (:quantity item)}) cart-items))
+        widget-config @(subscribe [:ecom/widget-config])
+        main-config (symbol-key-to-string-key widget-config)
+        current-user @(subscribe [:ecom/current-user])
+        user-preference (:preferredAddress current-user)
+        config (when main-config (assoc main-config "country" (symbol-key-to-string-key (get main-config "country"))) )
         ]
     (net/log (str "skus: " sku-qty))
-    (.initstore js/window (clj->js sku-qty))
+
+    ; expecting a config like this if hardcoding a widget configuration is desired
+    ;[config {"apiKey" "fluent-api-key"
+    ;         "googleAPIKey" "google-maps-API-key"
+    ;         "initialAddress" "Santa Monica, CA"
+    ;         "country" {"name" "United States" "code" "US"}
+    ;         }]
+
+    (println (str "Using widget configuration: " config))
+    (.initstore js/window
+                (clj->js sku-qty)
+                (clj->js (if user-preference (assoc config "initialAddress" user-preference) config)))
     )
   )
 

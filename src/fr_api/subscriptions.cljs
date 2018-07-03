@@ -283,6 +283,22 @@
 
 (re/reg-sub
 
+  :ecom/widget-config
+
+  (fn [db]
+    ;TODO multiple environment support
+    (if-let [environment (first (vals (get-in db [:current-site :environments])))]
+      (if-let [widget (:widget environment)]
+        widget
+        (println "No widget config found!" )
+        )
+      (println "No environment found!")
+      )
+    )
+  )
+
+(re/reg-sub
+
   :ecom/shipping-cost
 
   (fn [db]
