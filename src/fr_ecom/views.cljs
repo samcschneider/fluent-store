@@ -3,31 +3,42 @@
     [fr-ecom.components :as c]
     [fr-api.data-source :as ds]
     [cljs.pprint :as pp]
+    [re-frame.core :as re :refer [subscribe dispatch]]
     )
   )
 
-(defn home[app]
-  [:div [c/header' app] c/hero-items c/categories c/products-men c/divider c/products-women c/brands c/example-modal]
+(defn home[]
+  [:div [c/header'] c/hero-items c/categories c/products-men c/divider c/products-women c/brands c/example-modal]
   )
 
-(defn categories[app]
+(defn categories[]
   (println "views :: Rending product-list")
-  [:div [c/header' app] [c/product-list app] c/example-modal]
+  [:div [c/header'] [c/product-list] c/example-modal]
   )
+
+(defn orders[]
+  [:div [c/header'] [c/section-header "Order History" "Orders" "Your most recent orders"] [c/order-list]]
+  )
+
+(defn order-details[]
+  (println "Viewing order-details")
+  [:div [c/header'] [c/details-header] [c/order-details]])
 
 (defn hello[]
-  [:div c/header [:p "hello"] c/hero-items]
+  [:div [:p "hello"] c/hero-items]
   )
 
 (defn product-details [app]
   (println "views :: Rending product details...")
   (.scrollTo js/window 0 0) ;scroll window to top in case we're coming from a list page
-  (let [product-id (get-in @app [:args :product-id])
-        base-product (ds/find-product-by-id product-id);(first (filter #(= product-id (:id %)) (:catalog @app)))
+  (let [product-ref (:product-ref @(subscribe [:ecom/current-page-args]))
+        base-product @(subscribe [:ecom/products-by-ref product-ref]) ; (ds/find-product-by-id product-id)
         variant-selector-id (:variant-selector base-product)
-        variant-selector (get (:variant-selector @app) variant-selector-id)
+        variant-selectors @(subscribe [:ecom/variant-selectors])
+        variant-selector (get variant-selectors variant-selector-id)
         ]
 
+    (println (str "ref" product-ref " base product: " base-product " variant selector: " variant-selector-id))
   (when variant-selector-id
     (let [selector-ids (map :id (filter :selector? variant-selector))
           selector-state (reduce (fn [m v] (assoc m v "")) {} selector-ids)
@@ -40,38 +51,33 @@
         (swap! app assoc-in [:variant-state variant-selector-id] selector-state))
       )
     ))
-  [:div [c/header' app] [c/product-detail app]]
+  [:div [c/header'] [c/product-detail app]]
   )
 
-(defn cart [app]
-  ;(.log js/console (with-out-str (pp/pprint app )) )
-  ;(.log js/console (with-out-str (pp/pprint (:cart app))))
-  ;[:div c/header c/checkout-header c/checkout]
-  [:div [c/header' app] [c/section-header app "Shopping Cart" "Cart"] [c/cart-contents app]]
+(defn cart []
+  [:div [c/header'] [c/section-header "Shopping Cart" "Cart"] [c/cart-contents]]
   )
 
-(defn delivery[app]
-  [:div [c/header' app] [c/section-header app "Delivery Option" "Checkout / Delivery"] [c/delivery app]])
+(defn delivery[]
+  [:div [c/header'] [c/section-header "Delivery Option" "Checkout / Delivery"] [c/delivery]])
 
-; [:div [c/header' app] [c/section-header app "Choose Store" "Checkout / Store"] [c/store]])
+(defn store[]
+  [:div [c/header'] [c/store]])
 
-(defn store[app]
-  [:div [c/header' app] [c/store app]])
+(defn checkout-availability[]
+  [:div [c/header'] [c/section-header "Availability" "Checkout / Availability"] [c/availability]])
 
-(defn checkout-availability[app]
-  [:div [c/header' app] [c/section-header app "Availability" "Checkout / Availability"] [c/availability app]])
+(defn checkout[]
+  [:div [c/header'] [c/section-header "Checkout" "Checkout / Address"] [c/checkout]])
 
-(defn checkout[app]
-  [:div [c/header' app] [c/section-header app "Checkout" "Checkout / Address"] [c/checkout app]])
+(defn checkout-shipping[]
+  [:div [c/header'] [c/section-header "Shipping" "Checkout / Shipping"] [c/shipping]])
 
-(defn checkout-shipping[app]
-  [:div [c/header' app] [c/section-header app "Shipping" "Checkout / Shipping"] [c/shipping app]])
+(defn checkout-payment[]
+  [:div [c/header'] [c/section-header "Payment" "Checkout / Payment"] [c/payment]])
 
-(defn checkout-payment[app]
-  [:div [c/header' app] [c/section-header app "Payment" "Checkout / Payment"] [c/payment app]])
+(defn checkout-summary[]
+  [:div [c/header'] [c/section-header "Order Review" "Checkout / Review"] [c/cart-review]])
 
-(defn checkout-summary[app]
-  [:div [c/header' app] [c/section-header app "Order Review" "Checkout / Review"] [c/cart-review app]])
-
-(defn order-confirmation[app]
-  [:div [c/header' app] [c/order-confirmation app]])
+(defn order-confirmation[]
+  [:div [c/header'] [c/order-confirmation]])

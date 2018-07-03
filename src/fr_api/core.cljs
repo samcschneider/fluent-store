@@ -12,61 +12,29 @@
     [fr-ecom.views :as v]
     [fr-ecom.components :as comp]
     [fr-api.data-source :as ds]
-    [clojure.string :as string]))
+    [clojure.string :as string]
+    [fr-api.db]
+    [fr-api.events :as ev]
+    [re-frame.core :as re-frame :refer [dispatch subscribe]]
+    ))
 
 (enable-console-print!)
 
-(println "This text is printed from src/fr-api/core.cljs. Go ahead and edit it and see reloading in action.")
-
-(declare next-cart-key!)
 
 (defonce app-state (reagent/atom
                      {:orders {}
-                      :categories ds/categories
-                      :variant-selector ds/variant-selectors
                       :cart-add 2
                       :cart {}
                       :shipping 0.00
                       :replacement ds/replacement
                       :address {}
-                      :saved-address ds/saved-address
                       :payment {}
-                      :saved-payment ds/saved-payment
                       :config {}
-                      :next-key-fn #(next-cart-key!)
                       }))
-
-(defn next-cart-key![]
-  (let [key (+ 1 (get @app-state :cart-add 0))]
-    (swap! app-state assoc :cart-add key)
-    key
-    )
-  )
-
-(def orders-chan (chan))
-
-(defn get-orders[]
-  (net/log "Getting orders...")
-  (net/get-orders orders-chan)
-  )
 
 ;TODO move to common utils along with log
 (defn format-error [response]
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
-  )
-
-(defn orders-event-loop []
-  (go-loop []
-           (when-let [response (<! orders-chan)]
-             (net/log "received data on orders channel")
-             (net/log response)
-             (if (= (:status response) 200)
-               (swap! app-state merge @app-state {:orders (:body response)})
-               (swap! app-state merge @app-state {:orders (format-error response)})
-               )
-             (recur)
-             )
-           )
   )
 
 (def locations-chan (chan))
@@ -85,30 +53,30 @@
            )
   )
 
-(def sites-chan (chan))
-
-(defn sites-event-loop []
-  (go-loop []
-           (when-let [response (<! sites-chan)]
-             (net/log "received data on sites channel")
-             (net/log response)
-             (if (= (:status response) 200)
-               (let [sites (:body response)
-                     selected (filter (fn [i] (= (:name i) ds/default-site)) (:sites sites))]
-                 (swap! app-state merge @app-state sites)
-                 (let [site (if selected
-                              (first selected)
-                              ;otherwise, just default ot the first one?
-                              (first (:sites sites)))]
-                   (comp/change-site (:id site) app-state)
-                   )
-                 )
-               (swap! app-state merge @app-state {:sites-error (format-error response)})
-               )
-             (recur)
-             )
-           )
-  )
+;(def sites-chan (chan))
+;
+;(defn sites-event-loop []
+;  (go-loop []
+;           (when-let [response (<! sites-chan)]
+;             (net/log "received data on sites channel")
+;             (net/log response)
+;             (if (= (:status response) 200)
+;               (let [sites (:body response)
+;                     selected (filter (fn [i] (= (:name i) ds/default-site)) (:sites sites))]
+;                 (swap! app-state merge @app-state sites)
+;                 (let [site (if selected
+;                              (first selected)
+;                              ;otherwise, just default ot the first one?
+;                              (first (:sites sites)))]
+;                   (comp/change-site (:id site) app-state)
+;                   )
+;                 )
+;               (swap! app-state merge @app-state {:sites-error (format-error response)})
+;               )
+;             (recur)
+;             )
+;           )
+;  )
 
 ;temp hack to cache all active locations
 (defn get-locations[]
@@ -125,12 +93,6 @@
    [:div
     [:button {:on-click #(net/renew-token)} "Get Token"]]])
 
-(defn get-orders-ui [state]
-  [:div
-   [:h1 "Orders response: " [:textarea {:value (with-out-str (pp/pprint (:orders @state))) :cols 120 :rows 15}]]
-   [:div
-    [:button {:on-click #(get-orders)} "Get Orders"]]])
-
 (defn hook-browser-navigation! []
   (doto (History.)
     (events/listen
@@ -143,76 +105,84 @@
   (secretary/set-config! :prefix "#")
 
   (defroute "/" []
-            (swap! app-state assoc :page :home))
+            (dispatch [:ecom/navigate :home])
+            )
 
   (defroute "/categories/:category-id" [category-id]
-            (js/console.log (str "category id: " category-id))
-            ;TODO hate this... there has to be a cleaner way to get query params and path args
-            ;to the dispatched methods?!
-            (swap! app-state assoc :args {:category-id category-id})
-            (swap! app-state assoc :page :categories))
+            (dispatch [:ecom/navigate :categories {:category-id category-id}])
+            )
 
   (defroute "/hello" []
-            (swap! app-state assoc :page :hello))
+            (dispatch [:ecom/navigate :hello]))
 
   (defroute "/cart" []
-            (swap! app-state assoc :page :cart))
+            (dispatch [:ecom/navigate :cart]))
 
   (defroute "/checkout-delivery" []
-            (swap! app-state assoc :page :checkout.delivery))
+            (dispatch [:ecom/navigate :checkout.delivery]))
 
   (defroute "/checkout-store" []
-            (swap! app-state assoc :page :checkout.store))
+            (dispatch [:ecom/navigate :checkout.store])
+            )
 
   (defroute "/checkout-availability" []
-            (swap! app-state assoc :page :checkout.availability))
+            (dispatch [:ecom/navigate :checkout.availability])
+            )
 
   (defroute "/checkout-address" []
-           (swap! app-state assoc :page :checkout.address))
+            (dispatch [:ecom/navigate :checkout.address])
+            )
 
   (defroute "/checkout-shipping" []
-            (swap! app-state assoc :page :checkout.shipping))
+            (dispatch [:ecom/navigate :checkout.shipping])
+            )
 
   (defroute "/checkout-payment" []
-            (swap! app-state assoc :page :checkout.payment))
+            (dispatch [:ecom/navigate :checkout.payment])
+            )
 
   (defroute "/checkout-summary" []
-            (swap! app-state assoc :page :checkout.summary))
+            (dispatch [:ecom/navigate :checkout.summary])
+            )
 
   (defroute "/checkout-placeorder" []
-            (swap! app-state assoc :page :checkout.placeorder))
+            (dispatch [:ecom/navigate :checkout.placeorder])
+            )
 
-  (defroute "/product-details/:product-id" [product-id]
-            (js/console.log (str "product id: " product-id))
-            ;TODO hate this... there has to be a cleaner way to get query params and path args
-            ;to the dispatched methods?!
-            (swap! app-state assoc :args {:product-id product-id})
-            (swap! app-state assoc :page :product.details))
+  (defroute "/product-details/:product-ref" [product-ref]
+            (dispatch [:ecom/navigate :product.details {:product-ref product-ref}])
+            )
+
+  (defroute "/order-history" []
+           (dispatch [:ecom/navigate :order-history])
+           )
+
+  (defroute "/order-details/:order-id" [order-id]
+            (dispatch [:ecom/navigate :order-details {:order-id order-id}])
+            )
 
   (hook-browser-navigation!))
 
-(defmulti current-page #(@app-state :page))
+(defmulti current-page #(:id @(subscribe [:ecom/current-page])))
 
 (defmethod current-page :home []
-  [v/home app-state])
+  [v/home])
 
 (defmethod current-page :categories []
-  (println "Rendering :: categories")
-  [v/categories app-state])
+  [v/categories])
 
 (defmethod current-page :hello []
   [v/hello])
 
 (defmethod current-page :cart []
-  [v/cart app-state])
+  [v/cart])
 
 (defmethod current-page :product.details []
   [v/product-details app-state])
 
 (defmethod current-page :checkout.delivery []
-  [v/delivery app-state])
+  [v/delivery])
 
-; cc option
 (defmethod current-page :checkout.store []
   [v/store app-state])
 
@@ -241,40 +211,35 @@
 (defmethod current-page :checkout.placeorder []
   [v/order-confirmation app-state])
 
-;(defn setup-ui []
-;
-;  (orders-event-loop)
-;  [:div header hero-items categories products-men divider products-women brands example-modal
-;   ;[:div
-;   ; (token-ui net/bearer)
-;   ; (get-orders-ui responses)
-;   ;]
-;   ]
-;  )
+(defmethod current-page :order-history []
+  [v/orders])
 
+(defmethod current-page :order-details []
+  [v/order-details])
 
-
-(defn setup-ui' []
-
-  ;TODO introduce app namespace? Comp --> App <-- core --> Comp
-  (comp/config-event-loop app-state next-cart-key!)
-  (sites-event-loop)
-  (net/fr-get "http://localhost:8890/site" {} sites-chan)
-  (orders-event-loop)
-  (locations-event-loop)
-  (comp/fulfilment-options-event-loop app-state)
-  (comp/place-order-event-loop app-state)
-  (get-locations)
+(defn setup-ui []
+  ;(orders-event-loop)
   (app-routes)
   current-page
   )
 
-(reagent/render-component [setup-ui']
-                          (. js/document (getElementById "app")))
-;(defn ^:export main []
-;  (app-routes)
-;  (reagent/render [current-page]
-;                  (.getElementById js/document "app")))
+(defn mount-root []
+  (re-frame/clear-subscription-cache!)
+  (reagent/render-component [setup-ui]
+                            (. js/document (getElementById "app"))))
+
+(defn ^:export init []
+  (re-frame/dispatch-sync [:ecom/initialize-db])
+  ;TODO lazy start these event loops?
+  (ev/new-sites-event-loop :ecom/sites-received :ecom/sites-error)
+  (ev/config-event-loop :ecom/config-received :ecom/config-error)
+  (ev/place-order-event-loop)
+  (ev/fulfilment-options-event-loop)
+  (ev/orders-event-loop :ecom/orders-received :ecom/orders-error)
+  (ev/order-details-event-loop :ecom/order-details-received :ecom/order-details-error)
+  (re-frame/dispatch-sync [:ecom/load-sites])
+  ;(dev-setup)
+  (mount-root))
 
 (defn on-js-reload []
   ;; optionally touch your app-state to force rerendering depending on

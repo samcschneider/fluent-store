@@ -2,20 +2,14 @@
 
 (def default-site "Maui Jim")
 
-(def categories (atom [
-                       {:id "c-001" :ref "KS-001" :name "Jewelery" :order 0}
-                       {:id "c-002" :ref "KS-002" :name "Necklaces" :parent "KS-001" :order 1}
-                       {:id "c-003" :ref "KS-003" :name "Earrings" :parent "KS-001" :order 2}
-                       {:id "c-004" :ref "KS-004" :name "Bracelets" :parent "KS-001" :order 3}
-                       {:id "c-010" :ref "AP-001" :name "Clothing" :order 10}
-                       {:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-001" :order 1}
-
-                 ;{:id "c-010.1" :ref "AP-0010-1" :name "Men's" :parent "AP-001" :order 1}
-                      ;{:id "c-010.1" :ref "AP-0010-1" :name "Women's" :parent "AP-001" :order 2}
-                      ; ;{:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-0010-1" :order 1}
-                 ;{:id "c-050" :ref "Foo" :name "Electronics" :order 5}
-                 ;{:id "c-060" :ref "Bar" :name "Brands" :order 4}
-                       ]))
+(def categories (atom {
+                       "c-001" {:id "c-001" :ref "KS-001" :name "Jewelery" :order 0}
+                       "c-002" {:id "c-002" :ref "KS-002" :name "Necklaces" :parent "KS-001" :order 1}
+                       "c-003" {:id "c-003" :ref "KS-003" :name "Earrings" :parent "KS-001" :order 2}
+                       "c-004" {:id "c-004" :ref "KS-004" :name "Bracelets" :parent "KS-001" :order 3}
+                       "c-005" {:id "c-010" :ref "AP-001" :name "Clothing" :order 10}
+                       "c-006" {:id "c-011" :ref "AP-002" :name "Shirts" :parent "AP-001" :order 1}
+                       }))
 
 (defn find-category-by-parent[parent-id]
   (let [cats (filter #(= parent-id (:parent %)) @categories)]
@@ -215,14 +209,36 @@
   )
 
 ;;Some sample cart items
-(def c1 {:key 0 :name "Amazing purple shirt" :description "Amazing purple shirt" :sku "SKU001" :image "" :thumbnail "img/shirt.png" :price 40.00 :quantity 3})
-(def c2 {:key 1 :name "Cool black shirt" :description "Cool black shirt" :sku "SKU002" :image "" :thumbnail "img/shirt-black.png" :price 12.00 :quantity 2})
-(def c3 {:key 2 :name "Stylish black shirt" :description "Stylish black shirt" :sku "SKU003" :image "" :thumbnail "img/shirt-black.png" :price 25.00 :quantity 4})
+(def c1 {:name "Amazing purple shirt" :description "Amazing purple shirt" :sku "SKU001" :image "" :thumbnail "img/shirt.png" :price 40.00 :quantity 3})
+(def c2 {:name "Cool black shirt" :description "Cool black shirt" :sku "SKU002" :image "" :thumbnail "img/shirt-black.png" :price 12.00 :quantity 2})
+(def c3 {:name "Stylish black shirt" :description "Stylish black shirt" :sku "SKU003" :image "" :thumbnail "img/shirt-black.png" :price 25.00 :quantity 4})
 
 (def replacement {:name "Braeburn Apples" :description "Braeburn Apples" :sku "SKU902" :thumbnail "img/apple-braeburn.jpg" :price 19.00})
 
-(def saved-address {"lastname" "Schneider" "country" "USA" "city" "Los Angeles" "email" "sam.schneider@fluentcommerce.com" "state" "CA" "street" "200 Main Street" "firstname" "Sam" "zip" "90275" "phone-number" "+1555-444-1212"})
-(def saved-payment {"card-name" "Samuel Schneider" "card-number" "4111 1111 1111 1111" "expiry-date" "12/19" "card-cvv" "333" "card-zip" "90275" "email" "sam.schneider@fluentcommerce.com" "phone-number" "+1555-444-1212"})
+(def sample-address {:firstname "Sam" :lastname "Schneider"
+                     :street "200 Main Street"
+                     :city "Los Angeles" :state "CA" :zip "90275" :country "USA"
+                     :phone-number "+1555-444-1212"
+                     :email "sam.schneider@fluentcommerce.com"})
+
+(def sample-payment {:card-name "Samuel Schneider"
+                     :card-number "4111 1111 1111 1111"
+                     :expiry-date "12/19" :card-cvv "333"
+                     :card-zip "90275"
+                     :email "sam.schneider@fluentcommerce.com"
+                     :phone-number "+1555-444-1212"})
+
+(def sample-user
+  {
+   :id "sam.schneider@fluentcommerce.com"
+   :loyalty "platinum"
+   :firstname "Sam"
+   :lastname "Schneider"
+   :shipping-address sample-address
+   :payment sample-payment
+   }
+  )
+
 
 
 

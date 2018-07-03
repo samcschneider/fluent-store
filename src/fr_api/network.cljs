@@ -8,18 +8,23 @@
     )
   )
 
-(def default-env {:client-id     "xxx"
-                  :client-secret "yyy"
-                  :username "zzz"
-                  :password "aaa"})
+(def default-env {:client-id     "aaa"
+                  :client-secret "bbb"
+                  :username "ccc"
+                  :password "ddd"
+                  :retailer-id 1})
 
 (def env (atom default-env))
 
-(def token-url (str "https://sandbox.api.fluentretail.com/oauth/token?username="
-                    (:username @env) "&password="
-                    (:password @env) "&scope=api&client_id="
-                    (:client-id @env) "&client_secret="
-                    (:client-secret @env) "&grant_type=password"))
+(def base-uri "https://sandbox.api.fluentretail.com/")
+
+(defn token-url[env]
+  (str "https://sandbox.api.fluentretail.com/oauth/token?username="
+                      (:username env) "&password="
+                      (:password env) "&scope=api&client_id="
+                      (:client-id env) "&client_secret="
+                      (:client-secret env) "&grant_type=password")
+  )
 
 (def bearer (reagent/atom "<no auth>"))
 
@@ -32,9 +37,8 @@
    (renew-token #())
     )
   ([retry-fn]
-   (go (let [response (<! (http/post token-url
-                                     {:form-params       (merge default-env {:grant_type "password"})
-                                      :with-credentials? false
+   (go (let [response (<! (http/post (token-url @env)
+                                     {:with-credentials? false
                                       }))]
          (let [token (:access_token (:body response))]
            (log token)
@@ -113,8 +117,14 @@
 
 (def fulfillment-options-endpoint "https://sandbox.api.fluentretail.com/api/v4.1/fulfilmentOptions")
 
-(defn get-orders [chan]
-  (fr-get order-endpoint {} chan)
+(defn get-orders [args chan]
+  (let [defaults {:start 1 :count 10}]
+    (fr-get order-endpoint {} (merge defaults args) chan)
+    )
+  )
+
+(defn get-order-details [order-id chan]
+  (fr-get (str order-endpoint "/" order-id) {} chan)
   )
 
 (defn place-order [order chan]
@@ -131,3 +141,14 @@
 ;fetch locations using default params (grab first 50 ACTIVE locations only)
 (defn get-all-locations [chan]
   (fr-get location-endpoint {} location-get-params chan))
+
+(def api-base "https://sandbox.api.fluentretail.com/api/v4.1/")
+
+;https://sandbox.api.fluentretail.com/api/v4.1/report/fulfilment?retailerId=1&serviceType=ALL&from=2018-03-16T00:00:00.000Z&to=2018-04-16T23:59:59.000Z
+;https://sandbox.api.fluentretail.com/api/v4.1/fulfilment?serviceType=%3AALL&from=2018-03-16T00%3A00%3A00.000Z&to=2018-04-16T23%3A59%3A59.000Z
+(def report-base (str api-base "report/"))
+(def fulfillment-report-endpoint (str report-base "fulfilment"))
+
+(defn fufillment-report[params chan]
+  (fr-get fulfillment-report-endpoint {} params chan)
+  )
