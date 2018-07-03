@@ -41,6 +41,7 @@
     </div>
 
     <script src="js/compiled/fr_api.js" type="text/javascript"></script>
+    <script>fr_api.core.init();</script>
     <footer class="main-footer">
       <!-- Service Block-->
       <div class="services-block">
@@ -155,12 +156,12 @@
       {
       // https://demona.sandbox.connect.fluentretail.com/storeLocator
       // https://sandbox.connect.fluentretail.com/storeLocator
-       window.initstore = function(items) {
+       window.initstore = function(items, config) {
        $.getScript('https://demona.sandbox.connect.fluentretail.com/storeLocator', function() {
 
                         parcelpoint.Store.init({
-                                        apiKey: "xxx,
-                                        googleAPIKey: 'yyy',
+                                        apiKey: config.apiKey,
+                                        googleAPIKey: config.googleAPIKey,
                                                features: [],
                                                targetDiv:      "store",
                                                clustering:     false,
@@ -169,11 +170,8 @@
                                                showETAOpenHours: true,
                                                showFulfilmentETA: true,
                                                showDirections: true,
-                                               initialAddress: "Santa Monica, CA",
-                                               country: {
-                                                    name: "United States",
-                                                    code: "US"
-                                                },
+                                               initialAddress: config.initialAddress, //"Santa Monica, CA",
+                                               country: config.country, //{name: "United States",code: "US"},
                                                 messages: {
                                                     search: "Search Location",
                                                     noLocationSelected: "No Location Selected",
