@@ -37,8 +37,6 @@
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
   )
 
-
-
 (def locations-chan (chan))
 
 (defn locations-event-loop []

@@ -16,13 +16,20 @@
                                     "https://mauijim.scene7.com/is/image/mauijim/H736-25W-01?$config1098$",
                    :quantity 1,
                    :price 249})
-(def default-db
 
+(def anonymous-user
+  {
+   :firstname "anonymous" :lastname ""
+   :saved-payment {}
+   :saved-address {}
+   }
+  )
+
+(def default-db
   {:cart-items (sorted-map)
-   :sites      []
+   :sites []
    :variant-selectors ds/variant-selectors
-   :saved-address ds/saved-address ;TODO move to config
-   :saved-payment ds/saved-payment ;TODO move to config
-   :config {:name "Local" :categories @ds/categories :products @ds/catalog}
+   :current-user anonymous-user ;ds/sample-user
+   :current-site {:name "Local" :categories @ds/categories :products @ds/catalog :users [anonymous-user]}
    }
   )

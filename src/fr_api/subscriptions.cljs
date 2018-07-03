@@ -150,7 +150,7 @@
   :ecom/active-site-abbreviation
 
   (fn [db]
-    (if-let [site-name (get-in db [:config :name])]
+    (if-let [site-name (get-in db [:current-site :name])]
       (apply str (map first (clojure.string/split site-name #"\s")))
       ""
       )
@@ -162,7 +162,7 @@
   :ecom/categories
 
   (fn [db]
-    (vals (get-in db [:config :categories]))
+    (vals (get-in db [:current-site :categories]))
     )
   )
 
@@ -187,7 +187,7 @@
   :ecom/category-by-parent
 
   (fn [db [e parent]]
-    (let [categories (vals (get-in db [:config :categories]))]
+    (let [categories (vals (get-in db [:current-site :categories]))]
       (vec (filter #(= (:parent %) parent) categories))
     )
     )
@@ -197,8 +197,11 @@
   :ecom/products-by-supercategory
 
   (fn [db [e category-id]]
-    (let [all-products (vals (get-in db [:config :products]))
-          category (get-in db [:config :categories category-id])]
+    (let [all-products (vals (get-in db [:current-site :products]))
+          cat-key (if (clojure.string/starts-with? category-id ":") (symbol (clojure.string/trim category-id)) category-id)
+          category (get-in db [:current-site :categories cat-key])
+          cat-keys (keys (get-in db [:current-site :categories]))
+          ]
       (filter #(contains? (set (:supercategories %)) (:ref category)) all-products)
       )
     )
@@ -208,7 +211,7 @@
   :ecom/products-by-ref
 
   (fn [db [_ product-ref]]
-    (let [all-products (vals (get-in db [:config :products]))]
+    (let [all-products (vals (get-in db [:current-site :products]))]
       (if all-products
         (let [product (first (filter #(= (:ref %) product-ref) all-products))]
           (if (nil? product)
@@ -242,9 +245,38 @@
            :prev-page (- start count)}
           )
 
-        {:has-next false :has-pref false :total 0 :current-page 0}
+        {:has-next false :has-prev false :total 0 :current-page 0}
 
         )
+      )
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/site-users
+
+  (fn [db]
+    (vals (get-in db [:current-site :customers]))
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/current-user
+
+  (fn [db]
+    (:current-user db)
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/logged-in?
+
+  (fn [db]
+    (let [current-user (:current-user db)]
+      (and current-user (not= (:firstname current-user) "anonymous"))
       )
     )
   )
@@ -292,7 +324,7 @@
 
   (fn [db]
     ;TODO maybe split and extract the first of each word?
-    (clojure.string/upper-case (first (get-in db [:config :name])))
+    (clojure.string/upper-case (first (get-in db [:current-site :name])))
     )
   )
 

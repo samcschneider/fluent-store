@@ -98,6 +98,7 @@
           ]]]]]])
   )
 
+;TODO attach the formatter to the site configuration (US vs UK AUS etc.)
 (defn date[val]
   (let [date-val (cljs-time.coerce/from-string val)]
     (tf/unparse (tf/formatters :date) date-val)
@@ -108,13 +109,11 @@
   (fmt/currency-format val)
   )
 
-;Date format example for the future
-
-;(defn date-format [date fmt & [tz]]
-;  (let [formatter (goog.i18n.DateTimeFormat. fmt)]
-;    (if tz
-;      (.format formatter date tz)
-;      (.format formatter date))))
+(defn user-link[user]
+  ^{:key (gensym "cx")}
+  [:li {:class "dropdown-item"}
+   [:a {:on-click #(dispatch [:ecom/switch-user user])} (str (:firstname user) " " (:lastname user))]]
+  )
 
 (defn mini-cart-row[cart-item]
   (let [{:keys [:thumbnail :price :name :quantity :key :description :sku]} cart-item]
@@ -131,7 +130,6 @@
     [:span {:class "price"} (currency price)]]
    [:div {:class "delete"}
     [:i {:class "fa fa-trash-o" :on-click #(dispatch [:ecom/remove-cart-item key])}]]]]]
-
     ))
 
 (defn menu' []
@@ -140,6 +138,8 @@
         cart-total @(subscribe [:ecom/cart-subtotal])
         top-level-categories @(subscribe [:ecom/top-level-categories])
         all-categories @(subscribe [:ecom/categories])
+        logged-in? @(subscribe [:ecom/logged-in?])
+        site-users @(subscribe [:ecom/site-users])
         ]
     [:nav {:class "navbar navbar-expand-lg"}
      [:div {:class "search-area"}
@@ -380,13 +380,26 @@
          [:a {:id "userdetails", :href "https://example.com", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
           [:i {:class "icon-profile"}]]
          [:ul {:aria-labelledby "userdetails", :class "dropdown-menu"}
-          [:li {:class "dropdown-item"}
-           [:a {:href "#"} "Profile       "]]
-          [:li {:class "dropdown-item"}
-           [:a {:href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider"}])} "Orders       "]]
+
+          (map user-link site-users)
+
+          (when logged-in?
+            (let [current-user @(subscribe [:ecom/current-user])
+                  customer-name (str (:firstname current-user) " " (:lastname current-user))]
+              [:li {:class "dropdown-item"}
+               [:a {:href "#order-history" :on-click #(dispatch [:ecom/load-orders {:query customer-name}])} "Orders       "]]
+              )
+            )
+
           [:li {:class "dropdown-divider"} "     "]
-          [:li {:class "dropdown-item"}
-           [:a {:href "#"} "Logout       "]]]] ;"<!-- Cart Dropdown-->"
+
+          (when logged-in?
+            [:li {:class "dropdown-item"}
+             [:a {:href "#"} "Logout       "]]
+            )
+
+          ]] ;"<!-- Cart Dropdown-->"
+
         [:div {:class "cart dropdown show"}
          [:a {:id "cartdetails", :href "#cart", :data-toggle "dropdown", :aria-haspopup "true", :aria-expanded "false", :class "dropdown-toggle"}
           [:i {:class "icon-cart"}]
@@ -823,9 +836,6 @@
          [:a {:href "#", :class "visit-product active btn-template-outlined wide"}
           [:i {:class "icon-search"}]"View\n                    Add to wishlist"]]]]]]]])
 
-;(def header
-;  [:header {:class "header"} navbar menu])
-
 (defn header' []
   [:header {:class "header"} [navbar'] [menu']]
   )
@@ -966,13 +976,8 @@
          [:option {:value "oldest"} "Oldest"]
          [:option {:value "lowest-price"} "Low Price"]
          [:option {:value "heigh-price"} "High Price"]]]
-       [:div {:class "row"}  ;"<!-- item-->"
-
-        ;category-row
-        ;(let [make-product (partial category-item-row app)]
+       [:div {:class "row"}
           (map category-item-row products)
-        ;  )
-
         ]
 
        [:nav {:aria-label "page navigation example", :class "d-flex justify-content-center"}
@@ -997,8 +1002,6 @@
            [:span {:class "sr-only"} "Next     "]]]]]]]]
     )
   )
-
-
 
 (defn order-row[row-item]
   (let [{:keys [:type :orderId :createdOn :totalPaidPrice :status]} row-item]
@@ -1030,14 +1033,16 @@
       [:tbody
        (map order-row orders)
        ]]
-     (let [paging @(subscribe [:ecom/order-paging])]
+     (let [paging @(subscribe [:ecom/order-paging])
+           current-user @(subscribe [:ecom/current-user])
+           customer-name (str (:firstname current-user) " " (:lastname current-user))]
 
         [:div {:class "container"}
          [:div {:class "row"}
 
                  [:div {:class "col-sm text-center"}
                   (when (:has-prev paging)
-                    [:a {:class "fa fa-angle-double-left" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider" :start (:prev-page paging)}])} "  Previous"]
+                    [:a {:class "fa fa-angle-double-left" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:query customer-name :start (:prev-page paging)}])} "  Previous"]
                     )
                   ]
                   [:div {:class "col-sm text-center"}
@@ -1045,10 +1050,9 @@
                    ]
                  [:div {:class "col-sm text-center"}
                   (when (:has-next paging)
-                    [:a {:class "fa" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:firstName "sam" :lastName "schneider" :start (:next-page paging)}])} "Next  " [:span {:class "fa fa-angle-double-right"}]]
+                    [:a {:class "fa" :href "#order-history" :on-click #(dispatch [:ecom/load-orders {:query customer-name :start (:next-page paging)}])} "Next  " [:span {:class "fa fa-angle-double-right"}]]
                     )
                   ]
-
           ]
         ]
        )
@@ -1179,10 +1183,8 @@
           [:li {:class "breadcrumb-item"}
            [:a {:href "index.html"} "Home"]]
           [:li {:class "breadcrumb-item active"} "Orders / Order Details"]]]]]
-
       )
     )
-
 
 (defn section-header[title breadcrumb & [alternate]]
   (let [cart-item-count @(subscribe [:ecom/cart-items-count])
@@ -1289,12 +1291,19 @@
   (dispatch [:ecom/set-form-value doc id value])
   )
 
+(defn maybe-keyword[val]
+  (if (clojure.string/starts-with? val ":" )
+    (keyword (clojure.string/replace-first val ":" ""))
+    val
+    )
+  )
+
 (defn text-input [id label name placeholder classes doc]
-  (let [field-val @(subscribe [:ecom/forms doc id])]
+  (let [field-val @(subscribe [:ecom/forms doc (maybe-keyword id)])]
     [:div {:class (str "form-group " classes)}
      [:label {:for id :class "form-label"} label]
      [:input {:id    id :type "text" :name name :placeholder placeholder :class "form-control"
-              :value field-val :on-change #(set-value! id (-> % .-target .-value)  doc)}]]
+              :value field-val :on-change #(set-value! (maybe-keyword id) (-> % .-target .-value)  doc)}]]
     )
   )
 
@@ -1325,10 +1334,6 @@
   (str "Error returned from server " (:status response) " " (get-in response [:body :message]))
   )
 
-
-
-
-
 (defn store-render []
       [:div {:class "container"}
                [:div {:class "CTAs d-flex  flex-column flex-lg-row"}
@@ -1345,8 +1350,6 @@
         ]
      )
 
-;TODO fix global reference to skus :(
-; perhaps tuck cart contents during previous step as a JS array stored in global state...
 (defn store-did-mount [this]
   (println "Store did mount!!")
   ;TODO check for presence of widget and change store vs reinit widget on every component render
@@ -1468,25 +1471,22 @@
   )
 
 ;TODO EVENTS
-(defn add-to-cart[product-id app quantity]
-  (let [
-        product (ds/find-product-by-id product-id) ;(first (filter #(= product-id (:id %)) (:catalog @app)))
-        parent (ds/find-parent-product product-id) ; (first (filter #(= (:parent product) (:id %)) (:catalog @app)))
-        cart (get :cart @app {})
-        ;key-val ((:next-key-fn @app))
-        ;cart-keys {:quantity quantity :key key-val}
-        ]
-    (println (str "add-to-cart:: adding " product-id " to cart"))
-    (let [cart-item (if parent
-                      parent
-                      product)
-                      ]
-      (println (str "cart item: " cart-item))
-      (dispatch [:ecom/add-to-cart cart-item quantity])
-      ;(swap! app assoc-in [:cart key-val] cart-item)
-      )
-    )
-  )
+;(defn add-to-cart[product-id app quantity]
+;  (let [
+;        product (ds/find-product-by-id product-id)
+;        parent (ds/find-parent-product product-id)
+;        cart (get :cart @app {})
+;        ]
+;    (println (str "add-to-cart:: adding " product-id " to cart"))
+;    (let [cart-item (if parent
+;                      parent
+;                      product)
+;                      ]
+;      (println (str "cart item: " cart-item))
+;      (dispatch [:ecom/add-to-cart cart-item quantity])
+;      )
+;    )
+;  )
 
 (defn quantity-selector [id]
   (let [selected-quantity (reagent/atom 1)]
@@ -1796,15 +1796,15 @@
 
         [:form {:action "#"}
          [:div {:class "row"}
-          [text-input "firstname" "First Name" "first-name" "Enter your first name" "col-md-6" :address]
-          [text-input "lastname" "Last Name" "last-name" "Enter your last name" "col-md-6" :address]
-          [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" :address]
-          [text-input "street" "Street" "street" "Enter your street address" "col-md-6" :address]
-          [text-input "city" "City" "city" "Your city" "col-md-3" :address]
-          [text-input "state" "State" "state" "Your state" "col-md-3" :address]
-          [text-input "zip" "Postal Code" "zip" "Your Postal Code" "col-md-3" :address]
-          [text-input "country" "Country" "country" "Your country" "col-md-3" :address]
-          [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :address]
+          [text-input ":firstname" "First Name" "first-name" "Enter your first name" "col-md-6" :address]
+          [text-input ":lastname" "Last Name" "last-name" "Enter your last name" "col-md-6" :address]
+          [text-input ":email" "Email Address" "email" "Enter your email address" "col-md-6" :address]
+          [text-input ":street" "Street" "street" "Enter your street address" "col-md-6" :address]
+          [text-input ":city" "City" "city" "Your city" "col-md-3" :address]
+          [text-input ":state" "State" "state" "Your state" "col-md-3" :address]
+          [text-input ":zip" "Postal Code" "zip" "Your Postal Code" "col-md-3" :address]
+          [text-input ":country" "Country" "country" "Your country" "col-md-3" :address]
+          [text-input ":phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :address]
           ]]
 
         [:div {:class "CTAs d-flex justify-content-between flex-column flex-lg-row"}
@@ -1904,16 +1904,16 @@
 
               [:form {:action "#" :autoComplete "false"}
                [:div {:class "row"}
-                [text-input "card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" :payment]
-                [text-input "card-number" "Card Number" "card-number" "Card Number" "col-md-6" :payment]
-                [text-input "expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" :payment]
-                [text-input "card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" :payment]
-                [text-input "card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" :payment]
+                [text-input ":card-name" "Name on Card" "card-name" "Name on Card" "col-md-6" :payment]
+                [text-input ":card-number" "Card Number" "card-number" "Card Number" "col-md-6" :payment]
+                [text-input ":expiry-date" "Expiration Date" "expiry-date" "MM/YY" "col-md-4" :payment]
+                [text-input ":card-cvv" "CVC/CVV" "card-cvv" "123" "col-md-4" :payment]
+                [text-input ":card-zip" "Billing Postal Code" "card-zip" "Postal Code" "col-md-4" :payment]
                 (when cc
-                  [text-input "phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :payment]
+                  [text-input ":phone-number" "Phone Number" "phone-number" "Enter your phone number" "col-md-6" :payment]
                   )
                 (when cc
-                  [text-input "email" "Email Address" "email" "Enter your email address" "col-md-6" :payment]
+                  [text-input ":email" "Email Address" "email" "Enter your email address" "col-md-6" :payment]
                   )
                 ]]]]]
            [:div {:class "card"}

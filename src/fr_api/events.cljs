@@ -85,7 +85,8 @@
   (fn [coeffects event]
     (net/log "loading sites from event...")
     ;TODO return an http effect instead of calling API directly and returning empty coeffects
-    (net/fr-get "http://localhost:8890/site" {} new-sites-chan)
+    ;(net/fr-get "http://localhost:8890/site" {} new-sites-chan)
+    (net/fr-get "http://ec2-13-57-56-125.us-west-1.compute.amazonaws.com:9191/site" {} new-sites-chan)
     {}
     )
   )
@@ -137,7 +138,16 @@
     (reset! ds/catalog (build-catalog (:products response)))
     ;TODO figure out what to do with ds...
     (reset! ds/categories (vals (:categories response)))
-    (assoc db :config response)
+
+
+    ;TODO select environment based on :config :env :default instead
+
+    (if-let [environment (first (vals (:environments response)))]
+      (reset! net/env environment)
+      (println "No environment found!")
+        )
+
+    (assoc db :current-site response)
     )
   )
 
@@ -175,7 +185,20 @@
   :ecom/use-saved-delivery-address
 
   (fn [db [_ value]]
-    (assoc-in db [:forms :address] (:saved-address db))
+    (println (println "Address: "(get-in db [:current-user :shipping-address])))
+    (assoc-in db [:forms :address] (get-in db [:current-user :shipping-address]))
+    )
+  )
+
+
+
+(rf/reg-event-db
+
+  :ecom/switch-user
+
+  (fn [db [_ user]]
+    (println (str "Payment: "(get-in db [:current-user :payment])))
+    (assoc db :current-user user)
     )
   )
 
@@ -184,7 +207,8 @@
   :ecom/use-saved-payment
 
   (fn [db [_ value]]
-    (assoc-in db [:forms :payment] (:saved-payment db))
+    (println (str "Payment: "(get-in db [:current-user :payment])))
+    (assoc-in db [:forms :payment] (get-in db [:current-user :payment]))
     )
   )
 
@@ -198,7 +222,7 @@
     )
   )
 
-(defn -derive-name [sym]
+(defn- derive-name [sym]
   "transforms symbols of the form: :somename-shipping to SOMENAME"
   (clojure.string/upper-case (clojure.string/replace (str sym) #"[:|-]|shipping" ""))
   )
@@ -213,7 +237,7 @@
                           (= value :express-shipping) 20
                           :else (or cost 0)                 ;unknown
                           )]
-      (assoc-in db [:cart :shipping] {:method value :cost shipping-cost :name (-derive-name value)})
+      (assoc-in db [:cart :shipping] {:method value :cost shipping-cost :name (derive-name value)})
       )
     )
   )
@@ -260,7 +284,8 @@
   (fn [cofx [_ site-id]]
     (net/log (str "Changing site to " site-id))
     ;TODO return an http/API effect instead of calling API directly and returning empty coeffects
-    (net/fr-get (str "http://localhost:8890/site/" site-id) {} config-chan)
+    (net/fr-get (str "http://ec2-13-57-56-125.us-west-1.compute.amazonaws.com:9191/site/" site-id) {} config-chan)
+    ;(net/fr-get (str "http://localhost:8890/site/" site-id) {} config-chan)
     {}
     )
   )
@@ -277,10 +302,10 @@
 
 (def orders-chan (chan))
 
-(defn get-orders[]
-  (net/log "Getting orders...")
-  (net/get-orders "sam" "schneider" orders-chan)
-  )
+;(defn get-orders[]
+;  (net/log "Getting orders...")
+;  (net/get-orders "sam" "schneider" orders-chan)
+;  )
 
 (rf/reg-event-fx
   :ecom/load-orders
@@ -408,31 +433,31 @@
 
 (defn build-cc-customer [payment]
   (let [pmt-field (partial get payment)
-        name (pmt-field "card-name")
+        name (pmt-field :card-name)
         name-parts (clojure.string/split name " ")
         first-name (first name-parts)
         last-name (last name-parts)
-        phone (pmt-field "phone-number")
-        email (pmt-field "email")]
+        phone (pmt-field :phone-number)
+        email (pmt-field :email)]
 
     (build-customer first-name last-name phone email)
     )
   )
 
 (defn build-hd-customer [address]
-  (let [field-list ["firstname" "lastname" "phone-number" "email"]]
+  (let [field-list [:firstname :lastname :phone-number :email]]
     (apply build-customer (map (partial get address) field-list))
     ))
 
 (defn build-shipping-address [address]
   (let [adr-field (partial get address)]
     {
-     "name"     (str (adr-field "firstname") " " (adr-field "lastname"))
-     "street"   (adr-field "street")
-     "city"     (adr-field "city")
-     "state"    (adr-field "state")
-     "postcode" (adr-field "zip")
-     "country"  (adr-field "country")
+     "name"     (str (adr-field :firstname) " " (adr-field :lastname))
+     "street"   (adr-field :street)
+     "city"     (adr-field :city)
+     "state"    (adr-field :state)
+     "postcode" (adr-field :zip)
+     "country"  (adr-field :country)
      }
     )
   )
@@ -446,13 +471,15 @@
         ship-method (get-in db [:cart :shipping :name])
         customer (if (= delivery :CC) (build-cc-customer payment) (build-hd-customer address))
         selected-store (get (js->clj (aget js/window "storeAddress")) "StoreId")
-        items (vec (map (fn [item] {"skuRef" (:ref item) "skuPrice" (:price item) "requestedQty" (:quantity item) "totalPrice" (* (:price item) (:quantity item))}) (vals (:cart-items db))))]
+        items (vec (map (fn [item] {"skuRef" (:ref item) "skuPrice" (:price item) "requestedQty" (:quantity item) "totalPrice" (* (:price item) (:quantity item))}) (vals (:cart-items db))))
+        retailer-id (:retailer-id @net/env)
+        ]
 
     (merge {
             "customer"   customer
             "items"      items
             "orderRef"   (str (rand-int 1000000))
-            "retailerId" 1}
+            "retailerId" retailer-id}
            (if (= delivery :CC)
              {"fulfilmentChoice"
                      {"address" {"locationRef" selected-store}}
@@ -540,10 +567,12 @@
 
   (fn [cofx [_]]
     (let [cart-items (vec (map (fn [item] {:skuRef (:ref item) :requestedQuantity (:quantity item)}) @(rf/subscribe [:ecom/cart-items])))
-          selected-store (js->clj (aget js/window "storeAddress"))]
+          selected-store (js->clj (aget js/window "storeAddress"))
+          retailer-id (:retailer-id @net/env)
+          ]
       (net/log (str "Checking fulfillment"))
       ;TODO get retailer id from config... maybe a subscription for active retailer?
-      (net/get-fulfillment-options (get selected-store "StoreId") cart-items 1 fulfillment-options-chan)
+      (net/get-fulfillment-options (get selected-store "StoreId") cart-items retailer-id fulfillment-options-chan)
       )
     {}
     )

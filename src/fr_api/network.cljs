@@ -8,29 +8,23 @@
     )
   )
 
-(def default-env {:client-id     "DEMONA"
-                  :client-secret "3e364537-2fc0-4af2-851e-29f77d842723"
-                  :username "demoretailer_admin"
-                  :password "2M0SNS"})
-
-;"retailerId": "119",
-;"apiKey": "N2W5H6",
-;"username": "sterling_admin",
-;"password": "Q7H73U",
-
-;(def default-env {:client-id     "DEMO"
-;                  :client-secret "bfbf3efe-f689-47d8-b172-0c5258d1c6a6"
-;                  :username "sterling_admin"
-;                  :password "Q7H73U"
-;                  :retailer-id "119"})
+(def default-env {:client-id     "aaa"
+                  :client-secret "bbb"
+                  :username "ccc"
+                  :password "ddd"
+                  :retailer-id 1})
 
 (def env (atom default-env))
 
-(def token-url (str "https://sandbox.api.fluentretail.com/oauth/token?username="
-                    (:username @env) "&password="
-                    (:password @env) "&scope=api&client_id="
-                    (:client-id @env) "&client_secret="
-                    (:client-secret @env) "&grant_type=password"))
+(def base-uri "https://sandbox.api.fluentretail.com/")
+
+(defn token-url[env]
+  (str "https://sandbox.api.fluentretail.com/oauth/token?username="
+                      (:username env) "&password="
+                      (:password env) "&scope=api&client_id="
+                      (:client-id env) "&client_secret="
+                      (:client-secret env) "&grant_type=password")
+  )
 
 (def bearer (reagent/atom "<no auth>"))
 
@@ -43,9 +37,8 @@
    (renew-token #())
     )
   ([retry-fn]
-   (go (let [response (<! (http/post token-url
-                                     {:form-params       (merge default-env {:grant_type "password"})
-                                      :with-credentials? false
+   (go (let [response (<! (http/post (token-url @env)
+                                     {:with-credentials? false
                                       }))]
          (let [token (:access_token (:body response))]
            (log token)
