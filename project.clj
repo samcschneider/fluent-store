@@ -59,7 +59,7 @@
                 :source-paths ["src"]
                 :compiler {:output-to "resources/public/js/compiled/fr_api.js"
                            :main fr-api.core
-                           :optimizations :advanced
+                           :optimizations :simple
                     	   :closure-defines {goog.DEBUG false}
                            :pretty-print false}}]}
 
