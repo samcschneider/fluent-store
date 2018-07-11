@@ -8,7 +8,7 @@
   )
 
 (defn home[]
-  [:div [c/header'] c/hero-items c/categories c/products-men c/divider c/products-women c/brands c/example-modal]
+  [:div [c/header'] [c/hero-items] c/categories c/products-men c/divider c/products-women c/brands c/example-modal]
   )
 
 (defn categories[]
@@ -17,7 +17,9 @@
   )
 
 (defn orders[]
-  [:div [c/header'] [c/section-header "Order History" "Orders" "Your most recent orders"] [c/order-list]]
+  (let [user @(subscribe [:ecom/current-user])]
+  [:div [c/header'] [c/section-header "Order History" "Orders" (str "Recent orders for " (:firstname user) " " (:lastname user))] [c/order-list]]
+    )
   )
 
 (defn order-details[]

@@ -297,6 +297,28 @@
     )
   )
 
+
+(re/reg-sub
+
+  :ecom/home-page-content
+
+  (fn [db]
+    (if-let [content (get-in db [:current-site :config :content :home])]
+      (do
+        (println "Found home page content " content)
+        (let [parsed (cljs.reader/read-string content)]
+          (println "Parsed content " parsed)
+          parsed
+          )
+        )
+      (do
+       ; (println "No home page content")
+        []
+       )
+      )
+    )
+  )
+
 (re/reg-sub
 
   :ecom/shipping-cost

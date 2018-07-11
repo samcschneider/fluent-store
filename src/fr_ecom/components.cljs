@@ -32,7 +32,9 @@
 ;            ) {} products)
 ;  )
 
-
+(defn log [msg]
+  (.log js/console (str msg))
+  )
 
 (def navbar
   [:div {:class "top-bar"}
@@ -635,42 +637,53 @@
 ;         [:a {:href "#cart", :class "btn btn-template wide"} "View Cart"]
 ;         [:a {:href "#checkout-address", :class "btn btn-template wide"} "Checkout"]]]]]]]])
 
-(def hero-items
-  [:section {:class "hero hero-home no-padding"}
-   [:div {:class "owl-carousel owl-theme hero-slider"}
-    [:div {:style {:background "url(img/hero-bg.jpg)"} :class "item d-flex align-items-center has-pattern"}
-     [:div {:class "container"}
-      [:div {:class "row"}
-       [:div {:class "col-lg-6"}
-        [:h1 "The Hub"]
-        [:ul {:class "lead"}
-         [:li
-          [:strong "Bootstrap 4 E-commerce"]" template"]
-         [:li
-          [:strong "18"]" pages, "
-          [:strong "6"]" colour variants"]
-         [:li
-          [:strong "SCSS"]" sources "]
-         [:li "frequent &amp; "
-          [:strong "free updates"]]]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-         [:i {:class "icon-bag"} " "]]]]]]
-    [:div {:style {:background "url(img/hero-bg-2.jpg)"} :class "item d-flex align-items-center"}
-     [:div {:class "container"}
-      [:div {:class "row"}
-       [:div {:class "col-lg-6 text-white"}
-        [:h1 "Labore et dolore magna aliqua"]
-        [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-         [:i {:class "icon-bag"} "  "]]]]]]
-    [:div {:style {:background "url(img/hero-bg-3.jpg)"} :class "item d-flex align-items-center"}
-     [:div {:class "container"}
-      [:div {:class "row"}
-       [:div {:class "col-lg-6 text-white"}
-        [:h1 "Sed do eiusmod tempor"]
-        [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
-        [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-         [:i {:class "icon-bag"} "           "]]]]]]]])
+(defn hero-items[]
+
+  (let [content @(subscribe[:ecom/home-page-content])]
+    (log (str "Content from subscription: " content))
+    (if (not-empty content)
+      [:div
+      content
+       ]
+      [:section {:class "hero hero-home no-padding"}
+       [:div {:class "owl-carousel owl-theme hero-slider"}
+        [:div {:style {:background "url(img/hero-bg.jpg)"} :class "item d-flex align-items-center has-pattern"}
+         [:div {:class "container"}
+          [:div {:class "row"}
+           [:div {:class "col-lg-6"}
+            [:h1 "The Hub"]
+            [:ul {:class "lead"}
+             [:li
+              [:strong "Bootstrap 4 E-commerce"] " template"]
+             [:li
+              [:strong "18"] " pages, "
+              [:strong "6"] " colour variants"]
+             [:li
+              [:strong "SCSS"] " sources "]
+             [:li "frequent &amp; "
+              [:strong "free updates"]]]
+            [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+             [:i {:class "icon-bag"} " "]]]]]]
+        [:div {:style {:background "url(img/hero-bg-2.jpg)"} :class "item d-flex align-items-center"}
+         [:div {:class "container"}
+          [:div {:class "row"}
+           [:div {:class "col-lg-6 text-white"}
+            [:h1 "Labore et dolore magna aliqua"]
+            [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
+            [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+             [:i {:class "icon-bag"} "  "]]]]]]
+        [:div {:style {:background "url(img/hero-bg-3.jpg)"} :class "item d-flex align-items-center"}
+         [:div {:class "container"}
+          [:div {:class "row"}
+           [:div {:class "col-lg-6 text-white"}
+            [:h1 "Sed do eiusmod tempor"]
+            [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
+            [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
+             [:i {:class "icon-bag"} "           "]]]]]]]]
+      )
+    )
+
+  )
 
 (defn product-category-swatch [index]
   [:div {:class "col-lg-4"}
