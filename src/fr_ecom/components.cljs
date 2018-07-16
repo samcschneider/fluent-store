@@ -647,37 +647,30 @@
        ]
       [:section {:class "hero hero-home no-padding"}
        [:div {:class "owl-carousel owl-theme hero-slider"}
-        [:div {:style {:background "url(img/hero-bg.jpg)"} :class "item d-flex align-items-center has-pattern"}
+        [:div {:style {:background "url(https://s3-us-west-1.amazonaws.com/fluent-demo-static/fluent/cloud_native_distributed_order_management_fluent_commerce.png)"} :class "item d-flex align-items-center has-pattern"}
          [:div {:class "container"}
           [:div {:class "row"}
            [:div {:class "col-lg-6"}
-            [:h1 "The Hub"]
+            [:h1 "Cloud Native Distributed Order Management"]
             [:ul {:class "lead"}
              [:li
-              [:strong "Bootstrap 4 E-commerce"] " template"]
-             [:li
-              [:strong "18"] " pages, "
-              [:strong "6"] " colour variants"]
-             [:li
-              [:strong "SCSS"] " sources "]
-             [:li "frequent &amp; "
-              [:strong "free updates"]]]
+              [:strong "Empowering merchants to rapidly out-convenience the competitition with orchestrated omnichannel software"]]
+             ]
             [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
              [:i {:class "icon-bag"} " "]]]]]]
-        [:div {:style {:background "url(img/hero-bg-2.jpg)"} :class "item d-flex align-items-center"}
+        [:div {:style {:background "url(https://s3-us-west-1.amazonaws.com/fluent-demo-static/fluent/global_inventory_header_fluent_commerce.png)"} :class "item d-flex align-items-center"}
          [:div {:class "container"}
           [:div {:class "row"}
-           [:div {:class "col-lg-6 text-white"}
-            [:h1 "Labore et dolore magna aliqua"]
-            [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
-            [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
-             [:i {:class "icon-bag"} "  "]]]]]]
-        [:div {:style {:background "url(img/hero-bg-3.jpg)"} :class "item d-flex align-items-center"}
+           [:div {:class "col-lg-6"}
+            [:h1 "Built for distributed order management"]
+            [:p {:class "lead"} "The Fluent Orchestration Cloud functionality is built on a commerce orchestration engine. It’s cloud native architecture enables continuous delivery of new platform features, the coordination and extension of all capability, and the rapid deployment of customisation with zero downtime."]
+            ]]]]
+        [:div {:style {:background "url(https://s3-us-west-1.amazonaws.com/fluent-demo-static/fluent/store_fulfilment_header_fluent_commerce.png)"} :class "item d-flex align-items-center"}
          [:div {:class "container"}
           [:div {:class "row"}
-           [:div {:class "col-lg-6 text-white"}
-            [:h1 "Sed do eiusmod tempor"]
-            [:p {:class "lead"} "Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."]
+           [:div {:class "col-lg-6"}
+            [:h1 "Store Fulfilment"]
+            [:p {:class "lead"} "Convert stores into mini DCs by giving in-store teams intuitive tools that make it easy to execute and manage deliveries, orders, customer collections and returns – and never miss a sale."]
             [:a {:href "#", :class "btn btn-template wide shop-now"} "Shop Now"
              [:i {:class "icon-bag"} "           "]]]]]]]]
       )

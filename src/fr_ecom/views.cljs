@@ -7,8 +7,8 @@
     )
   )
 
-(defn home[]
-  [:div [c/header'] [c/hero-items] c/categories c/products-men c/divider c/products-women c/brands c/example-modal]
+(defn home[] ;c/categories c/products-men c/divider c/products-women c/brands
+  [:div [c/header'] [c/hero-items] c/example-modal]
   )
 
 (defn categories[]
