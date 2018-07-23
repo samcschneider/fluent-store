@@ -78,6 +78,138 @@
 
   )
 
+(def locations-chan (chan))
+
+(defn locations-event-loop
+  [success failure]
+  (go-loop []
+           (when-let [response (<! locations-chan)]
+             (net/log "received data on locations channel")
+             (net/log response)
+             (let [body (:body response)]
+               (if (= (:status response) 200)
+                 (rf/dispatch [success body])
+                 (rf/dispatch [failure body])
+                 ))
+             (recur)
+             )
+           )
+  )
+
+(def warehouse-inventory-chan (chan))
+
+(defn warehouse-inventory-event-loop
+  [success failure]
+  (go-loop []
+           (when-let [response (<! warehouse-inventory-chan)]
+             (net/log "received data on locations channel")
+             (net/log response)
+             (let [body (:body response)]
+               (if (= (:status response) 200)
+                 (rf/dispatch [success body])
+                 (rf/dispatch [failure body])
+                 ))
+             (recur)
+             )
+           )
+  )
+
+(def store-inventory-chan (chan))
+
+(defn store-inventory-event-loop
+  [success failure]
+  (go-loop []
+           (when-let [response (<! store-inventory-chan)]
+             (net/log "received data on locations channel")
+             (net/log response)
+             (let [body (:body response)]
+               (if (= (:status response) 200)
+                 (rf/dispatch [success body])
+                 (rf/dispatch [failure body])
+                 ))
+             (recur)
+             )
+           )
+  )
+
+(rf/reg-event-db
+  :ecom/store-inventory-received
+  (fn [db [_ response]]
+    (assoc db :store-inventory response)
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/store-inventory-error
+  (fn [db [_ response]]
+    (assoc db :store-inventory {:error response})
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/warehouse-inventory-received
+  (fn [db [_ response]]
+    (assoc db :warehouse-inventory response)
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/warehouse-inventory-error
+  (fn [db [_ response]]
+    (assoc db :warehouse-inventory {:error response})
+    )
+  )
+
+(rf/reg-event-db
+  :ecom/locations-received
+  (fn [db [_ response]]
+    (assoc db :locations response)
+    )
+  )
+
+;{:locationType "WAREHOUSE" :collectionType CUSTOMER" :locationRefs ["ES101"] :orderItems [{:skuRef "MJS-001" :requestedQty" 5}]}
+(rf/reg-event-fx
+
+  :ecom/check-inventory
+
+  (fn [cofx [_ sku-ref]]
+    (let [db (:db cofx)
+          locations (get-in db [:locations :results])
+          loc-by-type (group-by :type locations)
+          store-sku-request {:skuRef sku-ref :requestedQty 1}
+          warehouse-sku-request {:skuRef sku-ref :requestedQty 10}
+          stores (map :locationRef (get loc-by-type "STORE"))
+          warehouses (map :locationRef (get loc-by-type "WAREHOUSE"))
+          base-args {:collectionType "CUSTOMER"}]
+
+      (net/get-inventory (merge base-args {:locationType "WAREHOUSE" :orderItems [warehouse-sku-request]
+                                           :locationRefs warehouses}) warehouse-inventory-chan)
+      (net/get-inventory (merge base-args {:locationType "STORE" :orderItems [store-sku-request]
+                                           :locationRefs stores}) store-inventory-chan)
+      {}
+      )
+    )
+  )
+
+
+(rf/reg-event-db
+  :ecom/locations-error
+  (fn [db [_ response]]
+    (assoc db :locations {:error response})
+    )
+  )
+
+(rf/reg-event-fx
+  :ecom/load-locations
+  (fn [coeffects event]
+    (net/log "loading locations from event...")
+    ;TODO return an http effect instead of calling API directly and returning empty coeffects
+    ;(net/fr-get "http://localhost:8890/site" {} new-sites-chan)
+    (net/get-all-locations locations-chan)
+    {}
+    )
+  )
+
 (def new-sites-chan (chan))
 
 (rf/reg-event-fx
@@ -145,11 +277,13 @@
     (if-let [environment (first (vals (:environments response)))]
       (reset! net/env environment)
       (println "No environment found!")
-        )
-
+      )
+    (rf/dispatch [:ecom/load-locations])
     (assoc db :current-site response)
     )
   )
+
+
 
 (rf/reg-event-db
 
