@@ -1550,11 +1550,15 @@
         valid-variants (get-in @app [:selected-variant product-ref])
         ;TODO fix variants... -> variant (merge base-product (first valid-variants))
         variant base-product
+        cc-available @(subscribe [:ecom/available-for-cc])
+        hd-available @(subscribe [:ecom/available-for-hd])
         ]
 
     (println (str "Pid " product-ref " product " base-product " variant-selector "
                   variant-selector " id -> " variant-selector-id))
     (println (str "Variant? " is-variant? " valid count: " (count valid-variants)))
+
+    (dispatch [:ecom/check-inventory product-ref])
 
     [:div
      [:section {:class "product-details no-padding-top"}
@@ -1617,6 +1621,12 @@
              ]
             )
           ]
+
+         [:div {:class "fa"}
+          [:p [:span {:class (if cc-available "fa-check-circle" "fa-ban")}]" Available for store pickup" ]
+          [:p [:span {:class (if hd-available "fa-check-circle" "fa-ban")}]" Available for delivery"]
+          ]
+
          [:ul {:class "CTAs list-inline"}
           [:li {:class "list-inline-item"}
            [:a {:href     "#", :class (if (and is-variant? (not= (count valid-variants) 1)) "btn btn-template wide disabled" "btn btn-template wide")

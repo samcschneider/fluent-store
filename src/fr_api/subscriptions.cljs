@@ -80,6 +80,53 @@
 
 (re/reg-sub
 
+  :ecom/locations
+
+  (fn [db]
+    (get-in db [:locations :results])
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/warehouses
+
+  (fn [db]
+    (filter (get-in db [:locations :results]) (fn[location] (= "WAREHOUSE" (:type location)) ))
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/stores
+
+  (fn [db]
+    (filter (get-in db [:locations :results]) (fn[location] (= "STORE" (:type location)) ))
+    )
+  )
+
+
+
+(re/reg-sub
+
+  :ecom/available-for-hd
+
+  (fn [db]
+    (= (get-in db [:warehouse-inventory :coverage]) "ALL")
+    )
+  )
+
+(re/reg-sub
+
+  :ecom/available-for-cc
+
+  (fn [db]
+    (= (get-in db [:store-inventory :coverage]) "ALL")
+    )
+  )
+
+(re/reg-sub
+
   :ecom/variant-selectors
 
   (fn [db]

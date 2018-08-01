@@ -30,6 +30,6 @@
    :sites []
    :variant-selectors ds/variant-selectors
    :current-user anonymous-user ;ds/sample-user
-   :current-site {:name "Local" :categories @ds/categories :products @ds/catalog :users [anonymous-user]}
+   :current-site {:name "Local" :categories {} :products {} :users [anonymous-user]}
    }
   )

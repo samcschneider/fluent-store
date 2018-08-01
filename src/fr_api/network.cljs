@@ -17,6 +17,7 @@
 (def env (atom default-env))
 
 (def base-uri "https://sandbox.api.fluentretail.com/")
+(def base-api (str base-uri "api/v4.1/"))
 
 (defn token-url[env]
   (str "https://sandbox.api.fluentretail.com/oauth/token?username="
@@ -151,4 +152,12 @@
 
 (defn fufillment-report[params chan]
   (fr-get fulfillment-report-endpoint {} params chan)
+  )
+
+(def inventory-endpoint (str base-api "inventory"))
+
+(defn get-inventory[options reply-chan]
+  "Sample value for options"
+  "{:locationType \"WAREHOUSE\" :collectionType CUSTOMER\" :locationRefs [\"ES101\"] :orderItems [{:skuRef \"MJS-001\" :requestedQty\" 5}]}"
+  (fr-post inventory-endpoint options {} reply-chan)
   )
